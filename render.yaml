@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: research-os
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn research_os.app:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: ADMIN_USERNAME
+        value: researcher
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: APP_BASE_URL
+        sync: false

@@ -1,0 +1,302 @@
+{
+  "verified_at": "2026-11-11T11:26:24.798987+00:00",
+  "storage_tested": "local SQLite only; Turso SQL-over-HTTP adapter contract tested, actual remote credentials unavailable",
+  "records": {
+    "total": 895,
+    "news": 636,
+    "reports": 259
+  },
+  "korean_news": {
+    "count": 236
+  },
+  "sources": [
+    {
+      "id": "kr-hk-economy",
+      "name": "한국경제 · 경제",
+      "status": "success",
+      "count": 50,
+      "last_success": "2026-11-11T11:13:02+00:00",
+      "error": null
+    },
+    {
+      "id": "kr-hk-it",
+      "name": "한국경제 · IT",
+      "status": "success",
+      "count": 50,
+      "last_success": "2026-11-11T11:13:03+00:00",
+      "error": null
+    },
+    {
+      "id": "kr-et-electronics",
+      "name": "전자신문 · 전자·소부장",
+      "status": "success",
+      "count": 46,
+      "last_success": "2026-11-11T11:13:10+00:00",
+      "error": null
+    },
+    {
+      "id": "kr-et-mobility",
+      "name": "전자신문 · 모빌리티",
+      "status": "success",
+      "count": 47,
+      "last_success": "2026-11-11T11:13:12+00:00",
+      "error": null
+    },
+    {
+      "id": "kr-et-economy",
+      "name": "전자신문 · 경제",
+      "status": "success",
+      "count": 43,
+      "last_success": "2026-11-11T11:13:14+00:00",
+      "error": null
+    },
+    {
+      "id": "bok-issues",
+      "name": "한국은행 · BOK 이슈노트",
+      "status": "success",
+      "count": 100,
+      "last_success": "2026-11-11T11:19:20+00:00",
+      "error": null
+    },
+    {
+      "id": "bok-outlook",
+      "name": "한국은행 · 경제전망",
+      "status": "success",
+      "count": 59,
+      "last_success": "2026-11-11T11:19:21+00:00",
+      "error": null
+    },
+    {
+      "id": "bok-global",
+      "name": "한국은행 · 국제경제리뷰",
+      "status": "success",
+      "count": 100,
+      "last_success": "2026-11-11T11:19:23+00:00",
+      "error": null
+    },
+    {
+      "id": "fed",
+      "name": "Federal Reserve",
+      "status": "success",
+      "count": 20,
+      "last_success": "2026-11-11T11:17:50+00:00",
+      "error": null
+    },
+    {
+      "id": "semi-digest",
+      "name": "Semiconductor Digest",
+      "status": "success",
+      "count": 100,
+      "last_success": "2026-11-11T11:18:00+00:00",
+      "error": null
+    },
+    {
+      "id": "electrive",
+      "name": "electrive",
+      "status": "success",
+      "count": 30,
+      "last_success": "2026-11-11T11:18:06+00:00",
+      "error": null
+    },
+    {
+      "id": "storage",
+      "name": "Energy-Storage.news",
+      "status": "success",
+      "count": 250,
+      "last_success": "2026-11-11T11:18:11+00:00",
+      "error": null
+    }
+  ],
+  "indicators": [
+    {
+      "id": "A191RL1Q225SBEA",
+      "name": "미국 실질 GDP 성장률 · 전기비 연율",
+      "status": "success",
+      "unit": "%",
+      "frequency": "quarterly",
+      "updated_at": "2026-11-11T11:20:39+00:00",
+      "error": null,
+      "observations": 8,
+      "latest_observation": "2026-07-01"
+    },
+    {
+      "id": "CPIAUCSL",
+      "name": "미국 CPI · 계절조정",
+      "status": "success",
+      "unit": "1982–84=100",
+      "frequency": "monthly",
+      "updated_at": "2026-11-11T11:20:29+00:00",
+      "error": null,
+      "observations": 24,
+      "latest_observation": "2026-10-01"
+    },
+    {
+      "id": "DCOILBRENTEU",
+      "name": "Brent 현물",
+      "status": "success",
+      "unit": "USD / 배럴",
+      "frequency": "daily",
+      "updated_at": "2026-11-11T11:20:25+00:00",
+      "error": null,
+      "observations": 521,
+      "latest_observation": "2026-11-03"
+    },
+    {
+      "id": "DCOILWTICO",
+      "name": "WTI 현물",
+      "status": "success",
+      "unit": "USD / 배럴",
+      "frequency": "daily",
+      "updated_at": "2026-11-11T11:20:27+00:00",
+      "error": null,
+      "observations": 512,
+      "latest_observation": "2026-11-03"
+    },
+    {
+      "id": "DEXKOUS",
+      "name": "USD / KRW",
+      "status": "success",
+      "unit": "원 / USD",
+      "frequency": "daily",
+      "updated_at": "2026-11-11T11:20:14+00:00",
+      "error": null,
+      "observations": 517,
+      "latest_observation": "2026-11-06"
+    },
+    {
+      "id": "DFEDTARL",
+      "name": "미국 정책금리 하단",
+      "status": "success",
+      "unit": "%",
+      "frequency": "daily",
+      "updated_at": "2026-11-11T11:20:21+00:00",
+      "error": null,
+      "observations": 760,
+      "latest_observation": "2026-11-10"
+    },
+    {
+      "id": "DFEDTARU",
+      "name": "미국 정책금리 상단",
+      "status": "success",
+      "unit": "%",
+      "frequency": "daily",
+      "updated_at": "2026-11-11T11:20:20+00:00",
+      "error": null,
+      "observations": 760,
+      "latest_observation": "2026-11-10"
+    },
+    {
+      "id": "DGS10",
+      "name": "미국 국채 10년",
+      "status": "success",
+      "unit": "%",
+      "frequency": "daily",
+      "updated_at": "2026-11-11T11:20:22+00:00",
+      "error": null,
+      "observations": 517,
+      "latest_observation": "2026-11-09"
+    },
+    {
+      "id": "DGS2",
+      "name": "미국 국채 2년",
+      "status": "success",
+      "unit": "%",
+      "frequency": "daily",
+      "updated_at": "2026-11-11T11:20:24+00:00",
+      "error": null,
+      "observations": 517,
+      "latest_observation": "2026-11-09"
+    },
+    {
+      "id": "INDPRO",
+      "name": "미국 산업생산 · 계절조정",
+      "status": "success",
+      "unit": "2017=100",
+      "frequency": "monthly",
+      "updated_at": "2026-11-11T11:20:41+00:00",
+      "error": null,
+      "observations": 24,
+      "latest_observation": "2026-09-01"
+    },
+    {
+      "id": "IRLTLT01KRM156N",
+      "name": "한국 장기국채 수익률",
+      "status": "success",
+      "unit": "%",
+      "frequency": "monthly",
+      "updated_at": "2026-11-11T11:20:31+00:00",
+      "error": null,
+      "observations": 24,
+      "latest_observation": "2026-09-01"
+    },
+    {
+      "id": "PPIACO",
+      "name": "미국 PPI · 비계절조정",
+      "status": "success",
+      "unit": "1982=100",
+      "frequency": "monthly",
+      "updated_at": "2026-11-11T11:20:40+00:00",
+      "error": null,
+      "observations": 24,
+      "latest_observation": "2026-09-01"
+    },
+    {
+      "id": "VALEXPKRM052N",
+      "name": "한국 상품 수출 · 비계절조정",
+      "status": "success",
+      "unit": "백만 USD",
+      "frequency": "monthly",
+      "updated_at": "2026-11-11T11:22:07+00:00",
+      "error": null,
+      "observations": 22,
+      "latest_observation": "2026-07-01"
+    },
+    {
+      "id": "VALIMPKRM052N",
+      "name": "한국 상품 수입 · 비계절조정",
+      "status": "success",
+      "unit": "백만 USD",
+      "frequency": "monthly",
+      "updated_at": "2026-11-11T11:22:13+00:00",
+      "error": null,
+      "observations": 22,
+      "latest_observation": "2026-07-01"
+    }
+  ],
+  "tests": {
+    "passed": 16,
+    "browser_e2e": "not_run",
+    "github_actions_execution": "not_run",
+    "render_deployment": "not_connected",
+    "turso_remote": "not_connected",
+    "sqlite_restart_persistence": "passed",
+    "archive_and_csrf": "passed",
+    "fts_and_duplicate": "passed"
+  },
+  "sample_korean_titles": [
+    {
+      "title": "TSMC, 오픈AI·앤트로픽 10억弗 투자",
+      "url": "https://www.hankyung.com/article/2026111109811",
+      "published_at": "2026-11-11T09:02:38+00:00"
+    },
+    {
+      "title": "대한상의 “美 중간선거 이후에도 관세·투자 압박 지속…반도체·로봇 대응 필요”",
+      "url": "https://www.etnews.com/20261110000091",
+      "published_at": "2026-11-10T03:00:00+00:00"
+    },
+    {
+      "title": "한국투자증권, 퇴직연금 계좌로 '개인투자용 국채' 판매",
+      "url": "https://www.etnews.com/20261111000169",
+      "published_at": "2026-11-11T02:04:02+00:00"
+    }
+  ],
+  "local_load_test": {
+    "fixture_rows": 3000,
+    "initial_inserted": 3000,
+    "repeat_inserted": 0,
+    "repeat_duplicates": 3000,
+    "initial_seconds": 1.192,
+    "repeat_seconds": 0.019,
+    "scope": "temporary SQLite, synthetic fixtures only, never shown as real news"
+  }
+}

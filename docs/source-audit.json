@@ -1,0 +1,118 @@
+[
+  {
+    "name": "한국무역협회 국제무역통상연구원",
+    "url": "https://www.kita.net/",
+    "checked_at": "2026-11-11T11:19:50+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html;charset=UTF-8",
+    "error": null
+  },
+  {
+    "name": "산업연구원",
+    "url": "https://www.kiet.re.kr/",
+    "checked_at": "2026-11-11T11:19:50+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html;charset=utf-8",
+    "error": null
+  },
+  {
+    "name": "KDI",
+    "url": "https://www.kdi.re.kr/share/openAPI",
+    "checked_at": "2026-11-11T11:19:50+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html; charset=utf-8",
+    "error": null
+  },
+  {
+    "name": "KOSIS · 한국 수출입·생산",
+    "url": "https://kosis.kr/openapi/",
+    "checked_at": "2026-11-11T11:19:50+00:00",
+    "collector_verified": false,
+    "status": "robots_unverified",
+    "error": "robots HTTP 503"
+  },
+  {
+    "name": "한국 기준금리 · ECOS",
+    "url": "https://ecos.bok.or.kr/api/",
+    "checked_at": "2026-11-11T11:19:50+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html",
+    "error": null
+  },
+  {
+    "name": "한국석유공사",
+    "url": "https://www.opinet.co.kr/",
+    "checked_at": "2026-11-11T11:20:00+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html; charset=utf-8",
+    "error": null
+  },
+  {
+    "name": "EIA 보고서",
+    "url": "https://www.eia.gov/tools/rssfeeds/",
+    "checked_at": "2026-11-11T11:20:02+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html; charset=UTF-8",
+    "error": null
+  },
+  {
+    "name": "IEA",
+    "url": "https://www.iea.org/reports",
+    "checked_at": "2026-11-11T11:20:02+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html; charset=utf-8",
+    "error": null
+  },
+  {
+    "name": "IMF",
+    "url": "https://www.imf.org/en/Publications/WEO",
+    "checked_at": "2026-11-11T11:20:03+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html; charset=utf-8",
+    "error": null
+  },
+  {
+    "name": "OECD 보고서",
+    "url": "https://www.oecd.org/",
+    "checked_at": "2026-11-11T11:20:06+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html;charset=utf-8",
+    "error": null
+  },
+  {
+    "name": "World Bank",
+    "url": "https://data.worldbank.org/",
+    "checked_at": "2026-11-11T11:20:12+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html; charset=utf-8",
+    "error": null
+  },
+  {
+    "name": "SEMI",
+    "url": "https://www.semi.org/",
+    "checked_at": "2026-11-11T11:20:13+00:00",
+    "collector_verified": false,
+    "status": "page_http_301",
+    "content_type": "text/html; charset=UTF-8",
+    "error": null
+  },
+  {
+    "name": "SIA",
+    "url": "https://www.semiconductors.org/",
+    "checked_at": "2026-11-11T11:20:14+00:00",
+    "collector_verified": false,
+    "status": "page_http_200",
+    "content_type": "text/html; charset=UTF-8",
+    "error": null
+  }
+]

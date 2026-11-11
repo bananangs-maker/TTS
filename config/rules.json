@@ -1,0 +1,16 @@
+{
+  "version":"2026-11-11.1",
+  "weights":{"relevance":30,"keywords":15,"event":20,"source":10,"freshness":15,"novelty":10},
+  "duplicate_similarity":0.94,
+  "categories":{
+    "반도체":["반도체","메모리","디램","낸드","dram","nand","hbm","semiconductor","foundry","파운드리","웨이퍼","wafer","리소그래피","euv","tsmc","하이닉스"],
+    "2차전지":["배터리","이차전지","2차전지","battery","batteries","ess","에너지저장","전해액","nmp","lfp","ncm","리튬","lithium","양극재","음극재","전기차","재활용","recycling"],
+    "거시경제":["금리","환율","성장률","물가","inflation","gdp","cpi","ppi","수출","수입","교역","유가","원유","국채","경기","통화"],
+    "정책·통상":["정책","관세","규제","보조금","법안","tariff","policy","sanction","fomc","통상","수출통제"],
+    "기업 투자":["투자","증설","착공","공장","생산능력","가동률","capex","investment","capacity","facility","expansion"]
+  },
+  "event_words":["금리 인하","금리 인상","관세","수출통제","증설","착공","투자","capex","tariff","sanction","rate cut","rate hike","capacity"],
+  "tracked_keywords":["HBM","DRAM","NAND","CAPEX","반도체","파운드리","배터리","ESS","LFP","NMP","전해액","리튬","수출통제","관세","환율","금리"],
+  "signal":{"min_history_days":35,"min_weekly_articles":5,"growth_threshold":1.0,"z_threshold":2.0,"min_source_coverage":0.7},
+  "indicator_thresholds":{"DEXKOUS":0.01,"DGS10":0.15,"DGS2":0.15,"DCOILBRENTEU":0.05,"DCOILWTICO":0.05}
+}

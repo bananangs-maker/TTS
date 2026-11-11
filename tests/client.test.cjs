@@ -29,3 +29,11 @@ test('late response cannot replace a newly selected tab',async()=>{
  resolve(json({items:[],total:0}));await old;assert.match(h.root.innerHTML,/Signal monitor/);assert.equal(h.run('state.data'),null);
 });
 test('malformed timestamps do not crash the workspace renderer',()=>{const h=setup(async()=>json({}));assert.equal(h.run("date('not-a-date')"),'날짜 형식 미확인')});
+
+test('public workspace offers optional private login rather than mandatory login',()=>{
+ const h=setup(async()=>json({}));h.run("state.authenticated=false;state.tab='news';render()");assert.match(h.root.innerHTML,/개인 보관함 로그인/);assert.doesNotMatch(h.root.innerHTML,/id="login-form"/);
+});
+
+test('empty database explains collection never ran instead of implying refresh collects',async()=>{
+ const h=setup(async path=>json(path==='/api/sources'?{sources:[],runs:[],pending:[],collection_state:'never_run'}:{items:[],total:0}));h.run("state.tab='news'");await h.run('load()');assert.match(h.root.innerHTML,/GitHub Actions/);assert.match(h.root.innerHTML,/새로고침은 수집을 시작하지 않습니다/);
+});

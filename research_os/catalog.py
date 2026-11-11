@@ -45,10 +45,12 @@ PENDING=[
  ('SEMI','유료 자료 제외 · 공개 목록 수집 조건 미검증','https://www.semi.org/'),
  ('SIA','RSS 후보가 HTML/302 응답 · 미수집','https://www.semiconductors.org/')]
 def initialize(db):
+ queries=[]
  for s in SOURCES:
   policy='공식 RSS · 개인 비공개 열람용 · 제목·원문 링크 보존 · 전문 미저장'
-  db.execute('INSERT INTO sources(id,name,url,homepage,kind,category,language,interval_minutes,policy) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,url=excluded.url,policy=excluded.policy',(s['id'],s['name'],s['url'],s['homepage'],s['kind'],s['category'],s['language'],s['interval_minutes'],policy))
- for i,n,u,f,p in SERIES:db.execute('INSERT INTO series(id,name,unit,frequency,provider,url) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',(i,n,u,f,p,'https://fred.stlouisfed.org/series/'+i))
+  queries.append(('INSERT INTO sources(id,name,url,homepage,kind,category,language,interval_minutes,policy) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,url=excluded.url,policy=excluded.policy',(s['id'],s['name'],s['url'],s['homepage'],s['kind'],s['category'],s['language'],s['interval_minutes'],policy)))
+ for i,n,u,f,p in SERIES:queries.append(('INSERT INTO series(id,name,unit,frequency,provider,url) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',(i,n,u,f,p,'https://fred.stlouisfed.org/series/'+i)))
 
  for idx,(n,note,url) in enumerate(PENDING):
-  db.execute('INSERT INTO source_candidates(id,name,url,method,status,note) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET note=excluded.note',('candidate-'+hashlib.sha256(n.encode()).hexdigest()[:16],n,url,'official_page_review','unverified',note))
+  queries.append(('INSERT INTO source_candidates(id,name,url,method,status,note) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET note=excluded.note',('candidate-'+hashlib.sha256(n.encode()).hexdigest()[:16],n,url,'official_page_review','unverified',note)))
+ db.execute_many(queries)

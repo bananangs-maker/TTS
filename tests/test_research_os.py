@@ -74,7 +74,7 @@ def test_feed_failure_is_logged_and_other_sources_continue(database):
 def test_auth_csrf_sql_filters_notes_and_persistence(database):
  record=sample()[0];store_entries(database,[record])
  with TestClient(app) as c:
-  assert c.get('/api/items').status_code==401;assert c.get('/api/export').status_code==401
+  assert c.get('/api/items').status_code==200;assert c.get('/api/export').status_code==401
   assert c.post('/api/login',json={'username':'researcher','password':'bad'}).status_code==401
   r=c.post('/api/login',json={'username':'researcher','password':'only-for-tests-long-password'});assert r.status_code==200;csrf=r.json()['csrf'];headers={'X-CSRF-Token':csrf}
   assert 'httponly' in r.headers['set-cookie'].lower()
@@ -158,3 +158,50 @@ def test_page_queries_are_bounded_without_per_source_or_series_requests(database
  monkeypatch.setattr(database,'execute',counted);monkeypatch.setattr(app_module,'db',lambda:database)
  sources(user={'user_id':'owner'});assert count<=5
  count=0;economy(user={'user_id':'owner'});assert count==2
+
+def test_public_read_does_not_expose_owner_archive(database):
+ entry=sample()[0];store_entries(database,[entry])
+ database.execute('INSERT INTO records(user_id,item_id,bookmarked,read,note,tags,project,updated_at) VALUES(?,?,?,?,?,?,?,?)',('owner',entry['id'],1,1,'PRIVATE OWNER NOTE','secret tag','secret project','2026-11-11T00:00:00+00:00'))
+ with TestClient(app) as c:
+  assert c.get('/api/me').json()['authenticated'] is False
+  item=c.get('/api/items').json()['items'][0]
+  assert item['note']=='' and item['personal_tags']=='' and item['project']=='' and item['bookmarked']==0
+  assert c.get('/api/items?saved=true').json()['total']==0
+  assert c.get('/api/overview').json()['saved_items']==[]
+  assert c.post('/api/record',json={'id':entry['id'],'bookmarked':True}).status_code==401
+  assert c.get('/api/export').status_code==401
+  assert c.get('/api/sources').json()['collection_state']=='never_run'
+
+def test_remote_pipeline_batches_startup_and_page_queries(database,monkeypatch,tmp_path):
+ import sqlite3
+ from research_os import app as app_module
+ calls=[];path=str(tmp_path/'remote-simulation.db')
+ def post(url,**kwargs):
+  requests=kwargs['json']['requests'];calls.append(len(requests)-1);results=[]
+  with sqlite3.connect(path) as conn:
+   for op in requests:
+    if op['type']=='close':results.append({'type':'ok','response':{'type':'close'}});continue
+    args=[]
+    for arg in op['stmt'].get('args',[]):
+     args.append(None if arg['type']=='null' else int(arg['value']) if arg['type']=='integer' else float(arg['value']) if arg['type']=='float' else arg['value'])
+    cur=conn.execute(op['stmt']['sql'],args);rows=cur.fetchall() if cur.description else []
+    def cell(v):return {'type':'null'} if v is None else {'type':'integer','value':str(v)} if isinstance(v,int) else {'type':'float','value':v} if isinstance(v,float) else {'type':'text','value':str(v)}
+    results.append({'type':'ok','response':{'result':{'cols':[{'name':x[0]} for x in cur.description or []],'rows':[[cell(v) for v in row] for row in rows],'affected_row_count':max(0,cur.rowcount)}}})
+  class Response:
+   def raise_for_status(self):pass
+   def json(self):return {'results':results}
+  return Response()
+ monkeypatch.setattr('research_os.db.requests.post',post)
+ remote=DB(url='libsql://example-test.turso.io',token='fake-local-test-only');monkeypatch.setattr(app_module,'db',lambda:remote)
+ with TestClient(app) as client:
+  assert len(calls)==3 # Schema + catalog + FTS repair, not dozens of round trips.
+  for endpoint in ['/api/items','/api/overview','/api/sources','/api/economy']:
+   calls.clear();assert client.get(endpoint).status_code==200;assert len(calls)==1,endpoint
+  calls.clear();assert client.get('/api/signals').status_code==200;assert len(calls)==3
+
+def test_public_read_can_start_without_password_hash(database,monkeypatch):
+ monkeypatch.delenv('ADMIN_PASSWORD_HASH',raising=False)
+ with TestClient(app) as c:
+  assert c.get('/api/me').status_code==200
+  assert c.get('/api/items').status_code==200
+  assert c.post('/api/login',json={'username':'researcher','password':'anything'}).status_code==401

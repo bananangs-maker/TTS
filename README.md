@@ -138,3 +138,36 @@ node --check research_os/static/app.js
 - 화면 왼쪽 하단 v1.1 또는 /healthz의 version=2026.11.11-ui-fix1로 수정본 적용 여부를 확인한다.
 
 추가 클라이언트 테스트: `node --test tests/client.test.cjs`.
+
+## v1.2 — 공개 조회와 독립 수집 시작 안내
+
+- 뉴스·보고서·지표·신호 조회는 로그인 없이 열린다. 개인 메모/북마크/내보내기와 설정 변경은 선택 로그인 후 사용한다.
+- 익명 조회는 owner 레코드로 대체하지 않는다. 기존 개인 메모·태그·프로젝트·북마크는 공개되지 않는다.
+- 테이블 초기화, 정보원 초기화, 화면별 SELECT를 Turso `/v2/pipeline`의 단일 HTTP 요청으로 묶었다.
+- 주요 화면 조회는 세션 확인을 제외하면 화면당 한 번의 DB HTTP 왕복, 신호 화면은 세 번이다.
+- `새로고침`은 수집 명령이 아니다. 수집 이력이 0이면 그 사실과 GitHub Actions 실행 안내를 보여준다.
+- SQL 실행 오류/지연은 로그로 확인하며 반복 새로고침을 해결법으로 안내하지 않는다.
+
+### 실제 배포 점검 결과 (2026-11-11)
+
+`https://research-os-gd1l.onrender.com`의 v1.1에서 Turso 기본 연결 및 로그인 후 화면을 확인했다.
+연결된 DB의 뉴스·보고서가 0건이고, 모든 정보원의 성공/시도 횟수가 0/0이며 실행 이력 표도 비어 있었다.
+이것은 이 DB에서 수집기가 아직 실행되지 않았거나 수집기가 다른 DB를 대상으로 실행됐다는 뜻이다.
+이 소스의 로컬 검증 자료 895건이 사용자의 Turso에 자동 전송된 것은 아니다.
+
+### 빈 DB에 첫 자료 수집
+
+1. GitHub 저장소 → Settings → Secrets and variables → Actions → Repository secrets.
+2. `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`을 **Render가 쓰는 것과 같은 DB**의 값으로 설정한다.
+   Render Environment와 GitHub Secrets는 별도 시스템이며 자동 공유되지 않는다.
+3. Actions → Collect public research → Run workflow → mode `all` → 실행.
+4. 로그에서 소스별 `inserted`, 지표별 `count`를 확인한다. 스케줄 활성화를 기다릴 필요는 없다.
+5. 앱 수집 상태에서 최초 성공 시각과 실제 수집 로그가 생겼는지 확인한다.
+6. Actions 메뉴에 workflow가 없으면 `.github/workflows/collect.yml`이 **기본 브랜치**에 포함됐는지 확인한다.
+   macOS Finder의 일반 보기에서 `.github` 폴더가 숨겨질 수 있으므로 업로드 누락에 주의한다.
+
+Turso 쓰기 토큰을 채팅·스크린샷·로그에 붙이지 않는다. GitHub 연결 또는 저장소 주소가 있어야
+워크플로의 실제 설치·실행 상태를 추가 확인할 수 있다.
+
+v1.2의 일괄 DB 전송은 로컬 HTTP 프로토콜 시뮬레이션으로 검증했고 실제 배포 검증은 적용 후 필요하다.
+현재 /healthz의 version `2026.11.11-tts-v1.2`와 화면 v1.2로 적용 여부를 확인한다.

@@ -24,7 +24,6 @@ def verify_password(password,encoded):
 @asynccontextmanager
 async def lifespan(app):
  if os.getenv('RENDER') and not os.getenv('TURSO_DATABASE_URL'):raise RuntimeError('Render requires Turso. Refusing ephemeral SQLite storage.')
- if not os.getenv('ADMIN_PASSWORD_HASH'):raise RuntimeError('Set ADMIN_PASSWORD_HASH. No default password.')
  d=db();d.migrate();initialize(d);d.index_missing();yield
 app=FastAPI(title='RESEARCH OS',docs_url=None,redoc_url=None,openapi_url=None,lifespan=lifespan)
 @app.exception_handler(Exception)
@@ -42,6 +41,15 @@ def session(request:Request):
  row=db().one('SELECT * FROM sessions WHERE token_hash=? AND expires_at>?',(hashlib.sha256(token.encode()).hexdigest(),now())) if token else None
  if not row:raise HTTPException(401,'로그인이 필요합니다.')
  return row
+
+def public_session(request:Request):
+ # Anonymous visitors see only shared external data; no owner fallback.
+ if request.cookies.get('research_session'):
+  try:
+   user=session(request);return {**user,'authenticated':True}
+  except HTTPException as error:
+   if error.status_code!=401:raise
+ return {'user_id':'','authenticated':False,'csrf':''}
 
 def origin_ok(request):
  origin=request.headers.get('origin');expected=os.getenv('APP_BASE_URL',str(request.base_url).rstrip('/')).rstrip('/')
@@ -65,7 +73,7 @@ def login(b:Login,request:Request):
  d.execute('DELETE FROM sessions WHERE expires_at<?',(stamp,));d.execute('INSERT INTO sessions VALUES(?,?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),'owner',expiry,csrf));d.execute('DELETE FROM login_attempts WHERE key_hash=?',(key,))
  response=JSONResponse({'ok':True,'csrf':csrf});response.set_cookie('research_session',token,httponly=True,secure=bool(os.getenv('RENDER')) or os.getenv('COOKIE_SECURE')=='true',samesite='strict',max_age=7*86400);return response
 @app.get('/api/me')
-def me(user=Depends(session)):return {'authenticated':True,'csrf':user['csrf'],'username':os.getenv('ADMIN_USERNAME','researcher')}
+def me(user=Depends(public_session)):return {'authenticated':user['authenticated'],'csrf':user['csrf'],'username':os.getenv('ADMIN_USERNAME','researcher') if user['authenticated'] else '게스트'}
 @app.post('/api/logout')
 def logout(user=Depends(write_session)):
  db().execute('DELETE FROM sessions WHERE token_hash=?',(user['token_hash'],));r=JSONResponse({'ok':True});r.delete_cookie('research_session');return r
@@ -83,7 +91,7 @@ def record(b:Record,user=Depends(write_session)):
  old=d.one('SELECT * FROM records WHERE user_id=? AND item_id=?',(user['user_id'],b.id)) or {'bookmarked':0,'read':0,'note':'','tags':'','project':''};old.update(b.model_dump(exclude_none=True))
  d.execute('INSERT INTO records(user_id,item_id,bookmarked,read,note,tags,project,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,item_id) DO UPDATE SET bookmarked=excluded.bookmarked,read=excluded.read,note=excluded.note,tags=excluded.tags,project=excluded.project,updated_at=excluded.updated_at',(user['user_id'],b.id,int(old['bookmarked']),int(old['read']),old['note'],old['tags'],old['project'],now()));return {'ok':True}
 @app.get('/api/items')
-def items(q:str=Query('',max_length=500),kind:str='',category:str='',source:str='',language:str='',start:str='',end:str='',sort:str='latest',saved:bool=False,unread:bool=False,project:str='',offset:int=Query(0,ge=0,le=1000000),limit:int=Query(50,ge=1,le=100),user=Depends(session)):
+def items(q:str=Query('',max_length=500),kind:str='',category:str='',source:str='',language:str='',start:str='',end:str='',sort:str='latest',saved:bool=False,unread:bool=False,project:str='',offset:int=Query(0,ge=0,le=1000000),limit:int=Query(50,ge=1,le=100),user=Depends(public_session)):
  d=db();where=['1=1'];args=[user['user_id']]
  for value,col in [(kind,'i.kind'),(source,'i.source_id'),(language,'s.language'),(project,'r.project')]:
   if value:where.append(col+'=?');args.append(value)
@@ -99,19 +107,24 @@ def items(q:str=Query('',max_length=500),kind:str='',category:str='',source:str=
  if unread:where.append('coalesce(r.read,0)=0')
  base='FROM items i JOIN sources s ON s.id=i.source_id LEFT JOIN records r ON r.item_id=i.id AND r.user_id=? WHERE '+' AND '.join(where)
  order='i.score DESC,i.published_at DESC' if sort=='importance' else 'i.published_at DESC,i.collected_at DESC'
- rows=d.all("SELECT i.*,s.name AS source_name,s.language,coalesce(r.bookmarked,0) AS bookmarked,coalesce(r.read,0) AS read,coalesce(r.note,'') AS note,coalesce(r.tags,'') AS personal_tags,coalesce(r.project,'') AS project "+base+' ORDER BY '+order+' LIMIT ? OFFSET ?',args+[limit,offset])
- return {'items':rows,'total':d.one('SELECT count(*) AS n '+base,args)['n'],'offset':offset,'limit':limit}
+ queries=[("SELECT i.*,s.name AS source_name,s.language,coalesce(r.bookmarked,0) AS bookmarked,coalesce(r.read,0) AS read,coalesce(r.note,'') AS note,coalesce(r.tags,'') AS personal_tags,coalesce(r.project,'') AS project "+base+' ORDER BY '+order+' LIMIT ? OFFSET ?',args+[limit,offset]),('SELECT count(*) AS n '+base,args)]
+ result=d.execute_many(queries)
+ return {'items':result[0]['rows'],'total':result[1]['rows'][0]['n'],'offset':offset,'limit':limit}
 @app.get('/api/overview')
-def overview(user=Depends(session)):
+def overview(user=Depends(public_session)):
  d=db();day=datetime.now(timezone(timedelta(hours=9))).date().isoformat()+'T00:00:00+09:00';cut=datetime.fromisoformat(day).astimezone(timezone.utc).isoformat(timespec='seconds')
- counts=d.one("SELECT count(*) AS total,coalesce(sum(kind='news' AND collected_at>=?),0) AS today_news,coalesce(sum(kind='report' AND collected_at>=?),0) AS today_reports FROM items",(cut,cut));counts['saved']=d.one('SELECT count(*) AS n FROM records WHERE user_id=? AND bookmarked=1',(user['user_id'],))['n']
- return {'stats':counts,'sectors':d.all("SELECT category,count(*) AS count FROM items WHERE kind='news' GROUP BY category"),'latest_reports':items(kind='report',limit=4,offset=0,q='',category='',source='',language='',start='',end='',sort='latest',saved=False,unread=False,project='',user=user)['items'],'saved_items':items(saved=True,limit=4,offset=0,q='',kind='',category='',source='',language='',start='',end='',sort='latest',unread=False,project='',user=user)['items'],'projects':d.all("SELECT DISTINCT project FROM records WHERE user_id=? AND project!=''",(user['user_id'],)),'rule_version':RULES['version']}
+ row_sql="SELECT i.*,s.name AS source_name,coalesce(r.bookmarked,0) AS bookmarked,coalesce(r.read,0) AS read,coalesce(r.note,'') AS note,coalesce(r.tags,'') AS personal_tags,coalesce(r.project,'') AS project FROM items i JOIN sources s ON s.id=i.source_id LEFT JOIN records r ON r.item_id=i.id AND r.user_id=? "
+ queries=[("SELECT count(*) AS total,coalesce(sum(kind='news' AND collected_at>=?),0) AS today_news,coalesce(sum(kind='report' AND collected_at>=?),0) AS today_reports FROM items",(cut,cut)),('SELECT count(*) AS n FROM records WHERE user_id=? AND bookmarked=1',(user['user_id'],)),("SELECT category,count(*) AS count FROM items WHERE kind='news' GROUP BY category",()),(row_sql+"WHERE i.kind='report' ORDER BY i.published_at DESC LIMIT 4",(user['user_id'],)),(row_sql+"WHERE r.bookmarked=1 ORDER BY r.updated_at DESC LIMIT 4",(user['user_id'],)),("SELECT DISTINCT project FROM records WHERE user_id=? AND project!=''",(user['user_id'],))]
+ results=d.execute_many(queries);counts=results[0]['rows'][0];counts['saved']=results[1]['rows'][0]['n']
+ return {'stats':counts,'sectors':results[2]['rows'],'latest_reports':results[3]['rows'],'saved_items':results[4]['rows'],'projects':results[5]['rows'],'rule_version':RULES['version']}
 @app.get('/api/sources')
-def sources(user=Depends(session)):
- d=db();rows=d.all('SELECT * FROM sources ORDER BY language DESC,kind,name')
- reliability={r['source_id']:r for r in d.all("SELECT source_id,count(*) AS attempts,coalesce(sum(status!='failed'),0) AS successes,sum(fetched) AS fetched,sum(inserted) AS inserted,sum(duplicates) AS duplicates FROM runs WHERE started_at>=? GROUP BY source_id",((datetime.now(timezone.utc)-timedelta(days=28)).isoformat(),))}
+def sources(user=Depends(public_session)):
+ d=db();cut=(datetime.now(timezone.utc)-timedelta(days=28)).isoformat()
+ queries=[('SELECT * FROM sources ORDER BY language DESC,kind,name',()),("SELECT source_id,count(*) AS attempts,coalesce(sum(status!='failed'),0) AS successes,sum(fetched) AS fetched,sum(inserted) AS inserted,sum(duplicates) AS duplicates FROM runs WHERE started_at>=? GROUP BY source_id",(cut,)),('SELECT r.*,s.name FROM runs r JOIN sources s ON s.id=r.source_id ORDER BY started_at DESC LIMIT 50',()),('SELECT * FROM indicator_runs ORDER BY started_at DESC LIMIT 20',()),('SELECT * FROM source_candidates',())]
+ results=d.execute_many(queries);rows=results[0]['rows'];reliability={r['source_id']:r for r in results[1]['rows']}
  for source in rows:source['reliability']=reliability.get(source['id'],{'attempts':0,'successes':0,'fetched':0,'inserted':0,'duplicates':0})
- return {'sources':rows,'runs':d.all('SELECT r.*,s.name FROM runs r JOIN sources s ON s.id=r.source_id ORDER BY started_at DESC LIMIT 50'),'indicator_runs':d.all('SELECT * FROM indicator_runs ORDER BY started_at DESC LIMIT 20'),'pending':[{**r,'reason':r['note']+(' · 목록 확인 '+r['status'] if r['checked_at'] else '')} for r in d.all('SELECT * FROM source_candidates')]}
+ attempted=any(source['last_attempt'] for source in rows)
+ return {'sources':rows,'runs':results[2]['rows'],'indicator_runs':results[3]['rows'],'pending':[{**r,'reason':r['note']+(' · 목록 확인 '+r['status'] if r['checked_at'] else '')} for r in results[4]['rows']],'collection_state':'has_runs' if attempted else 'never_run','collection_help':'이 DB에 수집 실행 이력이 없습니다. GitHub Actions의 Collect public research를 실행하고 GitHub Secrets가 Render와 같은 Turso DB를 가리키는지 확인하세요.' if not attempted else None}
 class SourceSetting(BaseModel):
  id:str=Field(max_length=100)
  enabled:bool
@@ -121,18 +134,17 @@ def update_source(b:SourceSetting,user=Depends(write_session)):
  if not db().one('SELECT id FROM sources WHERE id=?',(b.id,)):raise HTTPException(404)
  db().execute('UPDATE sources SET enabled=?,interval_minutes=? WHERE id=?',(int(b.enabled),b.interval_minutes,b.id));return {'ok':True}
 @app.get('/api/economy')
-def economy(user=Depends(session)):
- d=db();all_series=d.all('SELECT * FROM series');points={}
- for row in d.all('SELECT series_id,date,value FROM observations ORDER BY series_id,date'):
-  points.setdefault(row['series_id'],[]).append({'date':row['date'],'value':row['value']})
+def economy(user=Depends(public_session)):
+ d=db();result=d.execute_many([('SELECT * FROM series',()),('SELECT series_id,date,value FROM observations ORDER BY series_id,date',())]);all_series=result[0]['rows'];points={}
+ for row in result[1]['rows']:points.setdefault(row['series_id'],[]).append({'date':row['date'],'value':row['value']})
  for series in all_series:
   series['points']=points.get(series['id'],[]);series['analysis']=indicator_stats(series['points'],series['id'],series['frequency'])
  return {'series':all_series}
 @app.get('/api/signals')
-def signals(user=Depends(session)):
+def signals(user=Depends(public_session)):
  d=db();result=keyword_signals(d);econ=economy(user)['series'];result['indicators']=[dict(id=s['id'],name=s['name'],unit=s['unit'],status=s['status'],analysis=s['analysis']) for s in econ];result['events']=d.all("SELECT i.id,i.title,i.url,i.published_at,i.tags,i.score FROM items i WHERE kind='news' AND (tags LIKE '%기업 투자%' OR tags LIKE '%정책·통상%') ORDER BY published_at DESC LIMIT 12");return result
 @app.get('/api/related/{item_id}')
-def related(item_id:str,user=Depends(session)):
+def related(item_id:str,user=Depends(public_session)):
  d=db();item=d.one('SELECT related_key FROM items WHERE id=?',(item_id,))
  return {'items':d.all('SELECT id,title,published_at,url FROM items WHERE related_key=? AND id!=? ORDER BY published_at DESC LIMIT 12',(item['related_key'],item_id)) if item and item['related_key'] else []}
 @app.get('/api/export')
@@ -141,7 +153,7 @@ def export(user=Depends(session)):
  return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type='application/json',headers={'Content-Disposition':'attachment; filename="research-os-archive.json"'})
 @app.get('/healthz')
 def health():
- try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.11-ui-fix1'}
+ try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.11-tts-v1.2'}
  except Exception:raise HTTPException(503,'Database unavailable')
 app.mount('/static',StaticFiles(directory=STATIC),name='static')
 @app.get('/')

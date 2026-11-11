@@ -305,5 +305,15 @@
     "javascript_tests_passed": 6,
     "production_error_root_cause": "pending URL and Render logs",
     "remote_fix_verified": false
+  },
+  "v1_2": {
+    "python_tests_passed": 21,
+    "javascript_tests_passed": 8,
+    "public_reads_private_archive_isolated": true,
+    "remote_pipeline": "SQL-over-HTTP protocol simulation with real SQLite execution",
+    "live_site_checked": "https://research-os-gd1l.onrender.com/",
+    "live_version_observed": "2026.11.11-ui-fix1",
+    "live_collection_state": "all 12 sources unverified; success/attempt counts 0/0; no collection rows; no items or observations shown",
+    "v1_2_deployed": false
   }
 }

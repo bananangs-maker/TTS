@@ -18,34 +18,42 @@ class DB:
    self.endpoint='https://'+p.netloc+'/v2/pipeline'
   else:Path(self.path).parent.mkdir(parents=True,exist_ok=True)
  def execute(self,sql,args=()):
-  if not self.remote:
-   with sqlite3.connect(self.path,timeout=30) as c:
-    c.row_factory=sqlite3.Row;c.execute('PRAGMA foreign_keys=ON');c.execute('PRAGMA journal_mode=WAL')
-    cur=c.execute(sql,args);rows=[dict(r) for r in cur.fetchall()] if cur.description else []
-    return {'rows':rows,'changes':max(0,cur.rowcount)}
+  if self.remote:return self.execute_many([(sql,args)])[0]
+  with sqlite3.connect(self.path,timeout=30) as c:
+   c.row_factory=sqlite3.Row;c.execute('PRAGMA foreign_keys=ON');c.execute('PRAGMA journal_mode=WAL')
+   cur=c.execute(sql,args);rows=[dict(r) for r in cur.fetchall()] if cur.description else []
+   return {'rows':rows,'changes':max(0,cur.rowcount)}
+ def execute_many(self,queries):
+  """One HTTP round trip; independent idempotent statements, not a transaction."""
+  if not queries:return []
+  if not self.remote:return [self.execute(sql,args) for sql,args in queries]
   def encode(v):
    if v is None:return {'type':'null'}
    if isinstance(v,(int,bool)):return {'type':'integer','value':str(int(v))}
    if isinstance(v,float):return {'type':'float','value':v}
    return {'type':'text','value':str(v)}
-  payload={'requests':[{'type':'execute','stmt':{'sql':sql,'args':[encode(v) for v in args]}},{'type':'close'}]}
-  r=requests.post(self.endpoint,headers={'Authorization':'Bearer '+self.token,'Content-Type':'application/json'},json=payload,timeout=45);r.raise_for_status()
-  result=r.json()['results'][0]
-  if result['type']=='error':raise RuntimeError('Database query failed: '+result.get('error',{}).get('message','unknown'))
-  result=result['response']['result'];cols=[c['name'] for c in result['cols']]
+  operations=[{'type':'execute','stmt':{'sql':sql,'args':[encode(v) for v in args]}} for sql,args in queries]
+  response=requests.post(self.endpoint,headers={'Authorization':'Bearer '+self.token,'Content-Type':'application/json'},json={'requests':operations+[{'type':'close'}]},timeout=(8,18))
+  response.raise_for_status();raw=response.json().get('results',[])
+  if len(raw)<len(queries):raise RuntimeError('Incomplete database pipeline response')
   def decode(v):
    if v['type']=='null':return None
    if v['type']=='integer':return int(v['value'])
    if v['type']=='float':return float(v['value'])
    return v.get('value')
-  return {'rows':[dict(zip(cols,map(decode,row))) for row in result['rows']],'changes':result.get('affected_row_count',0)}
+  results=[]
+  for index,item in enumerate(raw[:len(queries)]):
+   if item['type']=='error':raise RuntimeError('Database query '+str(index+1)+' failed: '+item.get('error',{}).get('message','unknown'))
+   result=item['response']['result'];cols=[c['name'] for c in result['cols']]
+   results.append({'rows':[dict(zip(cols,map(decode,row))) for row in result['rows']],'changes':result.get('affected_row_count',0)})
+  return results
  def all(self,sql,args=()):return self.execute(sql,args)['rows']
  def one(self,sql,args=()):
   rows=self.all(sql,args);return rows[0] if rows else None
  def migrate(self):
-  for statement in Path(__file__).with_name('schema.sql').read_text().split(';'):
-   if statement.strip():self.execute(statement)
   from .core import now
-  self.execute('INSERT OR IGNORE INTO schema_versions VALUES(1,?)',(now(),))
+  queries=[(statement,()) for statement in Path(__file__).with_name('schema.sql').read_text().split(';') if statement.strip()]
+  queries.append(('INSERT OR IGNORE INTO schema_versions VALUES(1,?)',(now(),)))
+  self.execute_many(queries)
  def index_missing(self):
   self.execute('INSERT INTO item_search(rowid,id,title,summary) SELECT i.rowid,i.id,i.title,i.summary FROM items i WHERE NOT EXISTS(SELECT 1 FROM item_search s WHERE s.rowid=i.rowid)')

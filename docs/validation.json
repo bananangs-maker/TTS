@@ -298,5 +298,12 @@
     "initial_seconds": 1.192,
     "repeat_seconds": 0.019,
     "scope": "temporary SQLite, synthetic fixtures only, never shown as real news"
+  },
+  "ui_patch": {
+    "version": "2026.11.11-ui-fix1",
+    "python_tests_passed": 18,
+    "javascript_tests_passed": 6,
+    "production_error_root_cause": "pending URL and Render logs",
+    "remote_fix_verified": false
   }
 }

@@ -1,4 +1,4 @@
-import os,secrets,hashlib,hmac,json,re
+import os,secrets,hashlib,hmac,json,re,logging,uuid
 from pathlib import Path
 from datetime import datetime,timezone,timedelta
 from contextlib import asynccontextmanager
@@ -27,6 +27,11 @@ async def lifespan(app):
  if not os.getenv('ADMIN_PASSWORD_HASH'):raise RuntimeError('Set ADMIN_PASSWORD_HASH. No default password.')
  d=db();d.migrate();initialize(d);d.index_missing();yield
 app=FastAPI(title='RESEARCH OS',docs_url=None,redoc_url=None,openapi_url=None,lifespan=lifespan)
+@app.exception_handler(Exception)
+async def unhandled_api_error(request:Request,error:Exception):
+ request_id=uuid.uuid4().hex[:12]
+ logging.getLogger('research_os').exception('API failure request_id=%s path=%s',request_id,request.url.path)
+ return JSONResponse({'detail':'서버에서 자료를 조회하지 못했습니다. Render Logs의 확인 코드로 오류를 확인해 주세요.','request_id':request_id},status_code=503,headers={'Cache-Control':'no-store','X-Request-ID':request_id})
 @app.middleware('http')
 async def security_headers(request,call_next):
  response=await call_next(request);response.headers.update({'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'",'Cache-Control':'no-store'})
@@ -47,7 +52,7 @@ def write_session(request:Request,user=Depends(session)):
  return user
 class Login(BaseModel):
  username:str=Field(min_length=1,max_length=100)
- password:str=Field(min_length=1,max_length=1000)
+ password:str=Field(min_length=1)
 @app.post('/api/login')
 def login(b:Login,request:Request):
  if not origin_ok(request):raise HTTPException(403,'Origin denied')
@@ -104,8 +109,8 @@ def overview(user=Depends(session)):
 @app.get('/api/sources')
 def sources(user=Depends(session)):
  d=db();rows=d.all('SELECT * FROM sources ORDER BY language DESC,kind,name')
- for s in rows:
-  s['reliability']=d.one("SELECT count(*) AS attempts,coalesce(sum(status!='failed'),0) AS successes,sum(fetched) AS fetched,sum(inserted) AS inserted,sum(duplicates) AS duplicates FROM runs WHERE source_id=? AND started_at>=?",(s['id'],(datetime.now(timezone.utc)-timedelta(days=28)).isoformat()))
+ reliability={r['source_id']:r for r in d.all("SELECT source_id,count(*) AS attempts,coalesce(sum(status!='failed'),0) AS successes,sum(fetched) AS fetched,sum(inserted) AS inserted,sum(duplicates) AS duplicates FROM runs WHERE started_at>=? GROUP BY source_id",((datetime.now(timezone.utc)-timedelta(days=28)).isoformat(),))}
+ for source in rows:source['reliability']=reliability.get(source['id'],{'attempts':0,'successes':0,'fetched':0,'inserted':0,'duplicates':0})
  return {'sources':rows,'runs':d.all('SELECT r.*,s.name FROM runs r JOIN sources s ON s.id=r.source_id ORDER BY started_at DESC LIMIT 50'),'indicator_runs':d.all('SELECT * FROM indicator_runs ORDER BY started_at DESC LIMIT 20'),'pending':[{**r,'reason':r['note']+(' · 목록 확인 '+r['status'] if r['checked_at'] else '')} for r in d.all('SELECT * FROM source_candidates')]}
 class SourceSetting(BaseModel):
  id:str=Field(max_length=100)
@@ -117,9 +122,11 @@ def update_source(b:SourceSetting,user=Depends(write_session)):
  db().execute('UPDATE sources SET enabled=?,interval_minutes=? WHERE id=?',(int(b.enabled),b.interval_minutes,b.id));return {'ok':True}
 @app.get('/api/economy')
 def economy(user=Depends(session)):
- d=db();all_series=d.all('SELECT * FROM series')
- for s in all_series:
-  s['points']=d.all('SELECT date,value FROM observations WHERE series_id=? ORDER BY date',(s['id'],));s['analysis']=indicator_stats(s['points'],s['id'],s['frequency'])
+ d=db();all_series=d.all('SELECT * FROM series');points={}
+ for row in d.all('SELECT series_id,date,value FROM observations ORDER BY series_id,date'):
+  points.setdefault(row['series_id'],[]).append({'date':row['date'],'value':row['value']})
+ for series in all_series:
+  series['points']=points.get(series['id'],[]);series['analysis']=indicator_stats(series['points'],series['id'],series['frequency'])
  return {'series':all_series}
 @app.get('/api/signals')
 def signals(user=Depends(session)):
@@ -134,7 +141,7 @@ def export(user=Depends(session)):
  return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type='application/json',headers={'Content-Disposition':'attachment; filename="research-os-archive.json"'})
 @app.get('/healthz')
 def health():
- try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development'}
+ try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.11-ui-fix1'}
  except Exception:raise HTTPException(503,'Database unavailable')
 app.mount('/static',StaticFiles(directory=STATIC),name='static')
 @app.get('/')

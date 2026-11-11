@@ -133,3 +133,28 @@ def test_fulltext_korean_and_private_tag_search(database):
 def test_backup_refuses_nonempty_destination(database,tmp_path):
  store_entries(database,sample());p=tmp_path/'backup.json';backup(database,p)
  with pytest.raises(ValueError,match='empty database'):restore(database,p)
+
+def test_database_failures_return_json_not_html(database,monkeypatch):
+ from research_os import app as app_module
+ with TestClient(app,raise_server_exceptions=False) as client:
+  client.post('/api/login',json={'username':'researcher','password':'only-for-tests-long-password'})
+  original=app_module.db
+  class Broken:
+   def one(self,*args):raise RuntimeError('simulated unavailable database')
+  monkeypatch.setattr(app_module,'db',lambda:Broken())
+  r=client.get('/api/items')
+  assert r.status_code==503
+  assert r.headers['content-type'].startswith('application/json')
+  assert r.json()['request_id']
+  monkeypatch.setattr(app_module,'db',original)
+
+def test_page_queries_are_bounded_without_per_source_or_series_requests(database,monkeypatch):
+ from research_os.app import sources,economy
+ from research_os import app as app_module
+ count=0;original=database.execute
+ def counted(*args,**kwargs):
+  nonlocal count
+  count+=1;return original(*args,**kwargs)
+ monkeypatch.setattr(database,'execute',counted);monkeypatch.setattr(app_module,'db',lambda:database)
+ sources(user={'user_id':'owner'});assert count<=5
+ count=0;economy(user={'user_id':'owner'});assert count==2

@@ -156,7 +156,7 @@ def test_page_queries_are_bounded_without_per_source_or_series_requests(database
   nonlocal count
   count+=1;return original(*args,**kwargs)
  monkeypatch.setattr(database,'execute',counted);monkeypatch.setattr(app_module,'db',lambda:database)
- sources(user={'user_id':'owner'});assert count<=5
+ sources(user={'user_id':'owner'});assert count<=9 # includes four bounded system-health summaries, still one remote pipeline
  count=0;economy(user={'user_id':'owner'});assert count==2
 
 def test_public_read_does_not_expose_owner_archive(database):
@@ -220,3 +220,26 @@ def test_public_menu_reads_with_expired_cookie_and_private_writes_stay_closed(da
   for path,payload in [('/api/record',{'id':entry['id'],'note':'ATTACK'}),('/api/source',{'id':entry['source_id'],'enabled':False,'interval_minutes':180}),('/api/research/project',{'name':'ATTACK'}),('/api/research/report',{'period':'daily'}),('/api/janus/import',{'symbol':'NEWS','kind':'news_signal','source_url':'https://example.org','csv_text':'date,value,available_at'})]:
    assert c.post(path,json=payload,follow_redirects=False).status_code==401,path
   assert database.one('SELECT note FROM records WHERE user_id=?',('owner',))['note']=='HIDDEN MEMO'
+
+
+def test_focus_filter_preserves_off_topic_archive_and_english_boundaries(database):
+ from research_os.core import classify
+ entries=[]
+ for number,title in enumerate(['[포토] 스마트금융 대상 수상자','HBM 공장 증설','press conference revenue','ESS battery storage','기준금리 인하']):
+  row=sample()[0];row.update(id='focus-'+str(number),url='https://example.org/focus-'+str(number),title=title,title_key=title);entries.append(row)
+ store_entries(database,entries)
+ with TestClient(app) as c:
+  all_items=c.get('/api/items?kind=news').json();focused=c.get('/api/items?kind=news&relevant=true').json()
+  assert all_items['total']==5 and focused['total']==3
+  assert {r['title'] for r in focused['items']}=={'HBM 공장 증설','ESS battery storage','기준금리 인하'}
+  assert database.one('SELECT count(*) AS n FROM items')['n']==5
+ assert '2차전지' not in classify('press conference revenue')[1]
+
+
+def test_health_storage_fingerprint_never_depends_on_token(database,monkeypatch):
+ a=DB(url='libsql://fingerprint-test.turso.io',token='secret-one');b=DB(url='https://fingerprint-test.turso.io',token='secret-two')
+ assert a.storage_id()==b.storage_id() and len(a.storage_id())==12
+ assert a.storage_id()!=DB(url='libsql://other.turso.io',token='secret-one').storage_id()
+ with TestClient(app) as c:
+  health=c.get('/healthz').json();assert health['storage_id']=='local-development' and 'commit' in health
+  assert 'secret-one' not in str(health)

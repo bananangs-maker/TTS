@@ -1,6 +1,8 @@
 'use strict';
 const RESEARCH_TABS=[['trends','Industry trends'],['sentiment','Sentiment index'],['events','Event database'],['quant','Quant research'],['report-center','Report center'],['research-archive','Research archive'],['janus','JANUS lab']];
 NAV.push(...RESEARCH_TABS);
+const READING_ORDER=['overview','news','reports','economy','trends','sentiment','signals','events','report-center','archive','research-archive','quant','janus'];
+NAV.sort((a,b)=>READING_ORDER.indexOf(a[0])-READING_ORDER.indexOf(b[0]));
 const research={industry:'반도체',days:90,keyword:'',grain:'day',end_date:'',series_id:'DEXKOUS',metric:'news_count',kind:'',q:'',output:null,janusOutput:null,project:'',busy:false};
 const isResearchTab=tab=>RESEARCH_TABS.some(([id])=>id===tab);
 function researchTitle(tab){const row=RESEARCH_TABS.find(([id])=>id===tab);return row?[row[1],{trends:'뉴스의 빈도를, 비교 가능한 시계열로',sentiment:'확장과 위축의 표현을 같은 규칙으로 측정합니다',events:'제목의 명시적 표현에서 추출한 검증 전 사건',quant:'가설을 세우고, 미래 정보를 배제해 검증합니다','report-center':'계산값과 원문 근거로 만드는 정형 보고서','research-archive':'가설·실패·근거를 함께 보존하는 연구 기록',janus:'TTS는 데이터 공급, JANUS는 독립적인 실증 연구'}[tab]]:null}
@@ -34,7 +36,7 @@ function plot(points,{label='기사 수',field='value',bounds=null}={}){
 function smallMetrics(rows){return `<div class="metrics research-metrics">${rows.map(([name,value,unit])=>`<div><span>${esc(name)}</span><strong>${value===null?'—':esc(typeof value==='number'?n(value):value)}<small>${esc(unit||'')}</small></strong></div>`).join('')}</div>`}
 function evidenceTable(rows){return `<details class="research-evidence"><summary>분석에 포함된 원문 근거 · 최근 최대 30건</summary><table><thead><tr><th>제목</th><th>이용가능일</th><th>규칙 분류</th><th>백필 제외</th></tr></thead><tbody>${rows.map(r=>`<tr><td><a href="${esc(r.url)}" target="_blank" rel="noreferrer">${esc(r.title)} ↗</a></td><td>${esc(r.collected_day)}</td><td>${esc(r.label)}</td><td>${r.backfill?'제외':'포함'}</td></tr>`).join('')}</tbody></table></details>`}
 function trendsView(sentiment=false){
- const d=state.researchData;const header=researchFilters();if(!d)return header+researchEmpty('분석 결과를 불러오는 중입니다.');const s=d.summary;
+ const d=state.researchData;const header=researchFilters();if(d?.processing&&['never_run','failed'].includes(d.processing.status))return header+researchEmpty('분석 자료를 아직 제공할 수 없습니다. 저장된 뉴스는 Newsroom에서 열람할 수 있습니다.');if(!d)return header+researchEmpty('분석 결과를 불러오는 중입니다.');const s=d.summary;
  const operations=`<div class="research-actions"><a class="secondary" href="/api/research/export?industry=${encodeURIComponent(research.industry)}&format=csv">JANUS CSV</a><a class="secondary" href="/api/research/export?industry=${encodeURIComponent(research.industry)}&format=json">근거·빈티지 JSON</a><button class="secondary" data-research="chart-download">차트 SVG</button>${state.authenticated?'<label class="chart-project-label">저장 프로젝트<select id="chart-project"><option value="">프로젝트 선택</option>'+projectOptions()+'</select></label><button class="secondary" data-research="chart-save">차트·계산 스냅샷 보관</button>':''}</div>`;
  let body=header+`<div class="notice">${esc(d.warning)} 당일 값은 잠정치이며 당일을 포함한 비교·급증 판정은 보류합니다. 어제까지의 종료일을 선택하면 완료 기간만 비교합니다.</div><div class="research-period">${esc(d.start)} — ${esc(d.end)} · KST · 실제 수집 ${s.observed_days}일 · 비교 가능 정보원 ${d.eligible_sources.length}개</div>`;
  if(!d.last_run)return body+researchEmpty('뉴스는 있지만 2.0 분석 파이프라인 실행 이력이 없습니다. GitHub Actions에서 업데이트된 Collect public research 작업을 실행하세요.');

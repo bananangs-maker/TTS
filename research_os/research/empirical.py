@@ -18,8 +18,10 @@ def finite(v):
  return v
 
 def monthly_news(db,industry,keyword='',max_months=120):
- end=(datetime.now(KST).date().replace(day=1)-timedelta(days=1));start=month_shift(end.isoformat(),-max_months+1)+'-01';dates=date_range((end-datetime.fromisoformat(start).date()).days+1,end);sources,_=coverage(db,dates)
- rows=db.all('SELECT * FROM research_daily WHERE version=? AND industry=? AND keyword=? AND day>=? AND day<=? ORDER BY day',(VERSION,industry,keyword,start,end.isoformat()));by=defaultdict(list)
+ end=(datetime.now(KST).date().replace(day=1)-timedelta(days=1));start=month_shift(end.isoformat(),-max_months+1)+'-01'
+ rows=db.all('SELECT * FROM research_daily WHERE version=? AND industry=? AND keyword=? AND day>=? AND day<=? ORDER BY day',(VERSION,industry,keyword,start,end.isoformat()))
+ if not rows:return []
+ start=max(start,min(r['day'] for r in rows)[:7]+'-01');dates=date_range((end-datetime.fromisoformat(start).date()).days+1,end);sources,_=coverage(db,dates);by=defaultdict(list)
  for row in rows:by[row['day'][:7]].append(row)
  output=[]
  for month,records in sorted(by.items()):
@@ -44,12 +46,18 @@ def monthly_news(db,industry,keyword='',max_months=120):
     selected=[x for x in by[r['month']] if x['source_id'] in fixed];p=sum(x['positive'] for x in selected);n=sum(x['negative'] for x in selected);r.update(news_count=sum(x['n'] for x in selected),sentiment=100*(p-n)/(p+n) if p+n else None,source_ids=sorted(fixed))
  return output
 
-def align(db,industry,series_id,keyword='',metric='news_count',horizon=1):
- if metric not in ['news_count','sentiment']:raise ValueError('Unknown news metric')
+def prepare_alignment(db,industry,series_id,keyword=''):
  series=db.one('SELECT * FROM series WHERE id=?',(series_id,))
  if not series:raise ValueError('Unknown economic series')
+ news=monthly_news(db,industry,keyword) if series['frequency']!='quarterly' else []
+ vintages=db.all('SELECT * FROM observation_vintages WHERE series_id=? ORDER BY observation_date,available_at',(series_id,)) if any(r['complete'] for r in news) else []
+ return series,news,vintages
+
+def align(db,industry,series_id,keyword='',metric='news_count',horizon=1,prepared=None):
+ if metric not in ['news_count','sentiment']:raise ValueError('Unknown news metric')
+ series,news,vintages=prepared if prepared is not None else prepare_alignment(db,industry,series_id,keyword)
  if series['frequency']=='quarterly':return [],{'reason':'분기 지표를 월별 자료로 복제하지 않습니다. 월·일 지표를 선택하세요.','series':series}
- news=monthly_news(db,industry,keyword);vintages=db.all('SELECT * FROM observation_vintages WHERE series_id=? ORDER BY observation_date,available_at',(series_id,));latest={}
+ latest={}
  for v in vintages:latest[v['observation_date']]=v
  target={}
  for v in sorted(latest.values(),key=lambda v:v['observation_date']):target[v['observation_date'][:7]]=v
@@ -86,12 +94,9 @@ def regression(x,y,names):
  return finite(dict(status='ok',n=len(Y),r_squared=float(fit.rsquared),coefficients=[dict(name=name,value=float(v),p=float(p),ci=list(map(float,ci))) for name,v,p,ci in zip(['intercept']+names,fit.params,fit.pvalues,fit.conf_int())],covariance='Newey-West HAC maxlags=3; predictors standardized in this descriptive sample',durbin_watson=float(durbin_watson(fit.resid)),ljung_box_p=float(lb['lb_pvalue'].iloc[0]),adf_target=adf(Y),adf_news=adf(X[:,-1]),warning='상관·회귀는 인과관계나 유효한 선행지표의 입증이 아닙니다. ADF 비기각은 단위근 부재를 보장하지 않습니다.'))
 
 def linkage(db,industry,series_id,keyword='',metric='news_count'):
- import numpy as np
- from scipy.stats import pearsonr
- from statsmodels.stats.multitest import multipletests
- results=[];paired=[];meta=None
+ prepared=prepare_alignment(db,industry,series_id,keyword);results=[];paired=[];meta=None
  for lag in [0,1,3,6]:
-  rows,meta=align(db,industry,series_id,keyword,metric,lag)
+  rows,meta=align(db,industry,series_id,keyword,metric,lag,prepared)
   minimum=CONFIG['quant_min_pairs'];entry=dict(lag_months=lag,n=len(rows),required=minimum,status='insufficient_data',correlation=None,p=None,adjusted_p=None)
   if len(rows)>=minimum:
    x=np.array([r['feature'] for r in rows]);y=np.array([r['target'] for r in rows])
@@ -102,6 +107,7 @@ def linkage(db,industry,series_id,keyword='',metric='news_count'):
   if lag==1:paired=rows
  valid=[r for r in results if r['p'] is not None]
  if valid:
+  from statsmodels.stats.multitest import multipletests
   adjusted=multipletests([r['p'] for r in valid],method='holm')[1]
   for r,p in zip(valid,adjusted):r['adjusted_p']=float(p)
  return finite(dict(version=VERSION,lags=results,aligned=paired,diagnostics=meta,data_hash=digest(paired),warning='동시/1/3/6개월의 4개 탐색 가설에 Holm 보정. 실행 간 반복 탐색까지 보정한 값은 아닙니다. p값은 시계열 의존성에 취약하며 회귀는 HAC 오차를 함께 제공합니다. 현재 수집값의 최초 이용가능 시점을 적용해 과거 발표일을 만들어내지 않습니다.'))

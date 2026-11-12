@@ -41,7 +41,7 @@ PENDING=[
  ('IEA','보고서 목록 수집 조건 미검증','https://www.iea.org/reports'),
  ('IMF','정형 전망 자료 API 수집 미검증','https://www.imf.org/en/Publications/WEO'),
  ('OECD 보고서','지표 일부 FRED 경유 · 보고서 수집 미검증','https://www.oecd.org/'),
- ('World Bank','API·세계교역 계열 검증 필요','https://data.worldbank.org/'),
+ ('World Bank','공식 무인증 Indicators API 확인 · 보고서/교역 수집기 미구현','https://data.worldbank.org/'),
  ('SEMI','유료 자료 제외 · 공개 목록 수집 조건 미검증','https://www.semi.org/'),
  ('SIA','RSS 후보가 HTML/302 응답 · 미수집','https://www.semiconductors.org/')]
 def initialize(db):

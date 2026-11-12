@@ -350,5 +350,6 @@
     },
     "render_patch_deployed": false,
     "blocker": "GitHub and Render connections unavailable"
-  }
+  },
+  "latest_maintenance_report": "docs/operations-audit.json"
 }

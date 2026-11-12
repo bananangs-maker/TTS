@@ -142,17 +142,22 @@ def collect_series(db,fetcher,entry,force=False):
    url=f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd={startdate}'
    _,body,_=fetcher.get(url);reader=csv.DictReader(io.StringIO(body.decode('utf-8-sig')))
    if reader.fieldnames not in (['observation_date',sid],['DATE',sid]):raise ValueError('Unexpected CSV header')
-  points=[]
+  points=[];received_at=datetime.now(timezone.utc).isoformat()
   for row in reader:
    day=row.get('observation_date',row.get('DATE'));value=row[sid]
    if not value or value=='.':continue
    datetime.strptime(day,'%Y-%m-%d');v=float(value)
-   if not math.isfinite(v) or day>datetime.now(timezone.utc).date().isoformat():raise ValueError('Invalid observation')
-   points.append((sid,day,v,start))
+   if not math.isfinite(v):raise ValueError('Invalid observation')
+   if day>datetime.now(timezone.utc).date().isoformat():continue
+   points.append((sid,day,v,received_at))
   if not points:raise ValueError('No valid observations')
+  db.execute("INSERT OR IGNORE INTO observation_vintages SELECT series_id,date,collected_at,value,'collector_first_seen_not_official_release' FROM observations WHERE series_id=?",(sid,))
   for o in range(0,len(points),100):
    batch=points[o:o+100];db.execute('INSERT INTO observations(series_id,date,value,collected_at) VALUES '+','.join('(?,?,?,?)' for _ in batch)+' ON CONFLICT(series_id,date) DO UPDATE SET value=excluded.value,collected_at=CASE WHEN observations.value!=excluded.value THEN excluded.collected_at ELSE observations.collected_at END',[v for p in batch for v in p])
-  count=len(points);db.execute("UPDATE series SET status='success',updated_at=?,error=NULL WHERE id=?",(start,sid))
+  db.execute("INSERT OR IGNORE INTO observation_vintages SELECT series_id,date,collected_at,value,'collector_first_seen_not_official_release' FROM observations WHERE series_id=?",(sid,))
+  stored={r['date']:r['value'] for r in db.all('SELECT date,value FROM observations WHERE series_id=? AND date>=? AND date<=?',(sid,points[0][1],points[-1][1]))}
+  if any(stored.get(day)!=value for _,day,value,_ in points):raise ValueError('Database read-back does not match downloaded observations')
+  count=len(points);db.execute("UPDATE series SET status='success',updated_at=?,error=NULL WHERE id=?",(received_at,sid))
  except Exception as e:error=safe_error(e)+(' · 공개 CSV 경로 실패. GitHub Secrets의 FRED_API_KEY로 공식 API 경로를 사용할 수 있습니다.' if not os.getenv('FRED_API_KEY') else '');db.execute("UPDATE series SET status='failed',error=? WHERE id=?",(error,sid))
  db.execute('INSERT INTO indicator_runs VALUES(?,?,?,?,?,?)',(uuid.uuid4().hex,sid,start,'failed' if error else 'success',count,error))
  return {'series':sid,'status':'failed' if error else 'success','count':count,'error':error}
@@ -174,11 +179,12 @@ def run(db,mode='all',force=False,source_ids=None):
  return results
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('--mode',choices=['all','feeds','indicators'],default='all');p.add_argument('--force',action='store_true');p.add_argument('--sources',nargs='*');a=p.parse_args()
- results=run(DB(),a.mode,a.force,a.sources)
+ database=DB();results=run(database,a.mode,a.force,a.sources)
+ print(json.dumps({'storage_id':database.storage_id(),'saved_counts':database.execute_many([('SELECT count(*) AS n FROM items',()),('SELECT count(*) AS n FROM observations',())])},ensure_ascii=False),flush=True)
  failures=sum(r.get('status')=='failed' for r in results);executed=sum(r.get('status') in ('failed','success','not_modified') for r in results)
  if os.getenv('GITHUB_STEP_SUMMARY'):
   with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary:
    summary.write('## Collection results\n\n| Source / series | Status | Error |\n|---|---|---|\n')
    for r in results:summary.write('| '+str(r.get('source',r.get('series','collector')))+' | '+r.get('status','unknown')+' | '+str(r.get('error') or '').replace('|','/')+' |\n')
  if failures:print(f'::warning::{failures} collection tasks failed. Review source/indicator logs; partial success is not full coverage.')
- if executed and failures==executed:raise SystemExit(1)
+ if failures:raise SystemExit(1)

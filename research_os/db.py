@@ -1,7 +1,7 @@
 """SQLite for development; official Turso SQL-over-HTTP for deployment.
 No dependency on a native or deprecated Python SDK. Same parameterized SQL.
 """
-import os,sqlite3,base64,threading
+import os,sqlite3,base64,threading,hashlib
 from pathlib import Path
 from urllib.parse import urlparse
 import requests
@@ -17,6 +17,8 @@ class DB:
    if not self.token:raise ValueError('TURSO_AUTH_TOKEN missing')
    self.endpoint='https://'+p.netloc+'/v2/pipeline'
   else:Path(self.path).parent.mkdir(parents=True,exist_ok=True)
+ def storage_id(self):
+  return hashlib.sha256(self.endpoint.encode()).hexdigest()[:12] if self.remote else 'local-development'
  def execute(self,sql,args=()):
   if self.remote:return self.execute_many([(sql,args)])[0]
   with sqlite3.connect(self.path,timeout=30) as c:

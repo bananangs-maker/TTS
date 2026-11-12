@@ -35,7 +35,7 @@ test('public workspace offers optional private login rather than mandatory login
 });
 
 test('empty database explains collection never ran instead of implying refresh collects',async()=>{
- const h=setup(async path=>json(path==='/api/sources'?{sources:[],runs:[],pending:[],collection_state:'never_run'}:{items:[],total:0}));h.run("state.tab='news'");await h.run('load()');assert.match(h.root.innerHTML,/GitHub Actions/);assert.match(h.root.innerHTML,/새로고침은 수집을 시작하지 않습니다/);
+ const h=setup(async path=>json(path==='/api/sources'?{sources:[],runs:[],pending:[],collection_state:'never_run'}:{items:[],total:0}));h.run("state.tab='news'");await h.run('load()');assert.doesNotMatch(h.root.innerHTML,/GitHub Actions/);h.run("state.tab='sources'");await h.run('load()');assert.match(h.root.innerHTML,/GitHub Actions/);assert.match(h.root.innerHTML,/새로고침은 수집을 시작하지 않습니다/);
 });
 function setupResearch(){const h=setup(async()=>json({}));vm.runInContext(fs.readFileSync('research_os/static/research.js','utf8').replace(/\nrender\(\);\s*$/,''),h.context);return h}
 test('research charts preserve missing observations as gaps',()=>{const h=setupResearch();const html=h.run("plot([{date:'2026-01-01',value:1},{date:'2026-01-02',value:null},{date:'2026-01-03',value:3}])");assert.match(html,/M18\.00/);assert.match(html,/M882\.00/);assert.doesNotMatch(html,/L882\.00/)});

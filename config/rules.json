@@ -1,5 +1,5 @@
 {
-  "version":"2026-11-11.1",
+  "version":"2026-11-12.quality1",
   "weights":{"relevance":30,"keywords":15,"event":20,"source":10,"freshness":15,"novelty":10},
   "duplicate_similarity":0.94,
   "categories":{

@@ -1,191 +1,62 @@
 # TTS — Think Tank System
 
-## 2.0.1 — 공개 열람과 선택 관리자 인증
+공개 경제·산업 뉴스, 한국은행 보고서, 공식 경제지표를 수집·검색하는 개인 리서치 시스템입니다. Render + Turso/libSQL + 독립 Python 수집기 + GitHub Actions를 사용합니다. LLM API·Supabase·회사 내부자료를 사용하지 않습니다.
 
-뉴스·보고서·경제지표 및 공개 분석 메뉴는 로그인 없이 시작합니다. 세션 조회가 지연·실패해도 공개 자료 요청은 독립적으로 실행합니다. 401 응답은 개인 상태만 지우며 전체 화면을 로그인으로 전환하지 않습니다. 로그인 화면은 사용자가 선택해서 열고 공개 뉴스룸으로 돌아갈 수 있습니다. 비로그인 정보원 상태 화면에는 설정 변경 폼을 표시하지 않습니다.
+## 지금 확인된 운영 상태
 
-개인 기록·내보내기·데이터 수정·정보원 설정·연구 결과 저장은 서버 인증/CSRF를 유지합니다. 관리자 키는 서버 환경변수에만 보관합니다. Python 36개 + JavaScript 18개 테스트 통과. 로컬 브라우저에서 공개 11개 메뉴와 보호 3개 메뉴를 확인했습니다.
+2026-11-12 운영 점검: 최신 GitHub/Render 커밋 `8c4397030b7369460eb3235e663f48df359b3e48`, 배포 성공, 앱 2.0.1과 정적 파일 일치. 뉴스545·보고서259건은 저장돼 있지만 경제지표14개는 FRED 요청 시간 초과로 관측0건입니다. 예약 수집은 실제 실행됐으나 워크플로가 구형으로 남아 분석 단계와 FRED 키 전달이 없습니다.
 
-이번 수정의 Render 재배포는 계정 연결 부재로 수행하지 못했습니다. 기존 Render를 직접 로그아웃해 점검한 결과 공개 열람은 가능했지만 경제지표 미수집·Quant 조회 시간 초과는 별도 문제로 남아 있습니다. `APPLY_PUBLIC_ACCESS.md`를 참고하세요.
+**이번 유지보수 소스는 수정·로컬 검증 완료, 운영 반영 전입니다.** GitHub 쓰기/Render 관리 연결이 없어 업로드·배포·새 예약 실행·원격 재시작은 수행하지 못했습니다. 로컬 자료를 운영 자료로 보고하지 않습니다.
 
+- [OPERATIONS_REPORT.md](OPERATIONS_REPORT.md): 사용자 요청 형식의 8개 영역 진단표, 기관별 상태, 실제 확인/미확인 구분
+- [OPERATIONS_FIX.md](OPERATIONS_FIX.md): 기존 저장소·DB를 유지하는 반영 절차와 워크플로 전체
+- [docs/operations-audit.json](docs/operations-audit.json): 운영·로컬 검증 수치
+- `COLLECT_WORKFLOW.yml`: 숨김 파일 업로드 누락을 막기 위한 워크플로 복사본. 실제 실행 경로는 **.github/workflows/collect.yml**입니다.
 
-## 2.0 업데이트
+## 유지보수 변경
 
-규칙 기반 산업 트렌드·확장/위축 지수, 이벤트 후보 DB, 시점 정렬 실증 연구, 기간 보고서, 개인 연구 기록, JANUS CSV 실험 기반을 추가했습니다. **Python 35개 + JavaScript 13개 테스트 통과.** 로컬 실제 자료 895건으로 분석 파이프라인을 실행했습니다. 장기 표본 부족을 예측 성공으로 표시하지 않습니다.
+- 읽기 중심의 흰색·회색·네이비 화면. 주요 뉴스→보고서→지표 순서, 보조 도구는 접어서 보존.
+- 기본 뉴스 목록은 명시적 연구 주제로 제한하며 ‘연구 주제만’을 해제하면 원래 자료를 모두 검색할 수 있습니다. 기존 기사를 삭제하지 않습니다.
+- 공개 열람과 선택 관리자 인증 분리. 개인 메모·북마크·설정·수정은 서버 인증과 CSRF 유지.
+- 데이터/분석 부재를 0으로 채우지 않고 결측·대기로 구분. 초기 Quant 조회의 반복 쿼리·불필요한 통계 로딩 축소.
+- 경제지표는 최초 수신·수정 빈티지 보존, 미래 관측 제외, DB 저장 후 재조회. 수집 실패는 다른 소스를 계속 처리한 뒤 실패 종료 코드로 노출.
+- 독립 수집 후 분석·보고서 생성. 저장소 지문을 웹/Actions에서 대조할 수 있으나 운영 배포·실행 전에는 동일 DB 확인 완료로 간주하지 않습니다.
 
-기존 사용자는 **[UPDATE_TTS_2_0.md](UPDATE_TTS_2_0.md)** 순서로 전체 코드와 Actions를 함께 업데이트합니다. 새 DB를 만들지 않습니다. 상세 구현·제한은 [docs/RESEARCH_2_0.md](docs/RESEARCH_2_0.md) 참고.
+## 로컬 실행
 
-**2.0 소스 패키지 완성 / Render 반영 전.** GitHub 쓰기와 Render 관리 연결이 없어 이번 버전의 업로드·원격 마이그레이션·배포 검증은 수행하지 않았습니다. 아래 초기 설치 기록은 과거 검증 시점과 구분해서 읽어 주세요.
-
-
-외부 공개자료를 자동 수집하고 규칙·통계로 변화를 관측하는 개인 경제·산업 리서치 웹앱.
-**Render + Turso(libSQL) + GitHub Actions + Python. Supabase / LLM / 생성형 AI API 미사용.**
-
-## 현재 구현과 실제 검증
-
-- 한국경제·전자신문 5개 RSS를 포함한 국내외 소스 12개, 한국은행 보고서 3종.
-- RSS/Atom, HTML 정리, 발행일/수집일 분리, URL/제목/보수적 유사도 중복 탐지, 오류·재시도·304.
-- FTS5 검색, 한국어/영어, 주제·출처·발행기간·안읽음·프로젝트 필터.
-- 재현 가능한 수집 시점 0~100 점수, 다중 주제, 근거/규칙 버전.
-- 35일 고정 정보원·수집 커버리지로 통제한 키워드 신호, 경제지표 변화·변동성·임계치.
-- 여섯 화면, 수집 상태 화면, 개인 로그인·CSRF·메모·태그·북마크·JSON 내보내기.
-- 표준 Python 독립 수집기, Render Blueprint, GitHub Actions workflow.
-- 로컬 SQLite 실제 수집/테스트 완료. **GitHub 계정·Render 연결·Turso 토큰이 없으므로 외부 배포/원격 DB/예약 첫 실행은 미검증**.
-- 최종 실제 수집 건수와 검사 결과는 `docs/validation.json`, 기관별 점검은 `docs/source-audit.json`.
-- 데이터파일은 소스 배포에 포함하지 않는다. 실행 후 실제 수집기로 DB를 채운다. 가상 seed나 데모 기사 없음.
-
-## 빠른 로컬 실행
-
-Python 3.12 권장. 다음 명령은 저장소 루트에서 실행한다.
+Python3.12 권장. 공개 열람에는 관리자 비밀번호 설정이 필요 없습니다.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m scripts.hash_password
-```
-
-출력된 해시를 `ADMIN_PASSWORD_HASH` 환경변수에 설정한다. 평문 비밀번호는 getpass로만 입력한다.
-비밀번호는 빈 값만 허용하지 않으며 길이 제한은 없다. 기본 아이디는 `researcher`, 변경하려면 `ADMIN_USERNAME` 설정.
-
-```bash
-export ADMIN_PASSWORD_HASH='출력된 pbkdf2 해시'
-python -m research_os.collector --mode all
+python -m research_os.collector --mode feeds
+python -m research_os.collector --mode indicators
+python -m research_os.research.pipeline
 uvicorn research_os.app:app --host 127.0.0.1 --port 8000
 ```
 
-브라우저: http://127.0.0.1:8000 . `.env.example`은 설정 이름의 예시이며 자동 로드하지 않는다.
-`.env`를 사용할 경우 호스팅/쉘의 환경변수 설정 방식을 통해 주입한다. 비밀값을 커밋하지 않는다.
+로컬 개발은 SQLite를 사용합니다. Render에서는 기존 `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`을 유지하며 로컬 임시 저장소로 대체하지 않습니다. `.env.example`은 설정 이름의 예시이며 자동 로드하지 않습니다. 개인 저장 기능은 `python -m scripts.hash_password`로 생성한 `ADMIN_PASSWORD_HASH`와 선택 `ADMIN_USERNAME`으로 활성화합니다. 비밀번호·토큰을 코드에 넣지 않습니다.
 
-## Turso 생성과 연결
-
-1. Turso 계정에서 **libSQL 엔진 DB**를 생성한다. 이 구현은 해당 엔진의 FTS5와 공식 `/v2/pipeline`을 대상으로 한다.
-2. 공식 CLI로 URL과 DB 전용 토큰을 확인/발급한다.
+## 검증
 
 ```bash
-turso db create research-os
-turso db show research-os --url
-turso db tokens create research-os
-```
-
-3. 서버 환경변수 `TURSO_DATABASE_URL`과 `TURSO_AUTH_TOKEN`을 설정한다. URL은 `libsql://...turso.io` 또는 공식 HTTPS 주소.
-4. Python collector를 실행하면 스키마·카탈로그를 생성하고 실제 자료를 수집한다. 원격 토큰은 서버 및 Actions Secrets에만 있다.
-
-실계정 생성·인증·원격 실접속은 아직 사용자 연결이 필요하다. 존재하지 않는 DB를 생성했다고 보고하지 않는다.
-공식 Python SDK/HTTP 및 무료 대안 비교는 `docs/ARCHITECTURE.md`를 참고.
-
-## GitHub + Render 배포
-
-1. 전체 코드를 GitHub 저장소에 push한다. 기존 사용자는 같은 저장소를 업데이트한다. `data/`, `.env`, `.venv`, backups는 제외되어 있다.
-2. GitHub repository → Settings → Secrets and variables → Actions에 다음을 등록한다.
-   - `TURSO_DATABASE_URL`
-   - `TURSO_AUTH_TOKEN`
-3. Render → New → Blueprint → 해당 저장소 선택. `render.yaml`을 사용한다. plan은 free로 명시되어 있다.
-4. Render 환경변수를 설정한다.
-   - `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` (같은 DB)
-   - `ADMIN_USERNAME` (기본 researcher)
-   - `ADMIN_PASSWORD_HASH` (위 도구로 생성)
-   - `APP_BASE_URL` (발급된 https://...onrender.com origin, 마지막 / 제외)
-5. 배포 로그의 기동 성공과 `/healthz`의 `storage: turso`를 확인한다.
-6. GitHub Actions의 Collect public research → Run workflow → all로 첫 수집을 실행한다.
-7. Actions 로그의 실제 성공과 앱 정보원·지표 갱신일을 대조한다.
-
-스케줄은 UTC 01:17·07:17·13:17·19:17 = **한국시간 10:17·16:17·22:17·04:17**.
-GitHub schedule은 기본 브랜치에 workflow가 있어야 실행되고 지연될 수 있다.
-공개 저장소에서 장기 활동이 없으면 예약 작업이 비활성화될 수 있으므로 확인할 것.
-공식 문서: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
-GitHub의 민간 저장소 Actions 사용량은 계정 요금/분 한도를 확인할 것. 주기적 인위적 ping으로 Render 절전을 우회하지 않는다.
-
-## 사용
-
-- Overview: 한국어 중요도순 기사, 오늘 수집 수, 최신 연구자료, 분야별 기사량, 실제 지표, 북마크.
-- Newsroom: 기본 한국어, 영어 전환 가능. 최신/수집 시점 중요도 정렬, 다중 주제 필터.
-- Research library: 제목 클릭 → PDF enclosure가 있으면 링크, 메모/태그/프로젝트, 연관 시리즈 추정.
-- Economic monitor: 관측일·수집일·단위·원천, 실제 시계열, 최근 값 표, 통계.
-- Signal monitor: 이력 부족/기준 이내/급증 조건, 공식 계산 근거, 설정 임계치, 정책·투자 태그 기사.
-- Personal archive: 북마크한 자료/메모/프로젝트 검색, JSON 백업.
-- 상단 수집 상태: 소스별 enabled/최소 주기, 실제 성공률·오류·미연결 기관.
-
-점수는 뉴스 진실성이나 예측 정확도가 아니다. 초기 신호 이력 부족은 정상 상태이며 가짜 비교기준을 만들지 않는다.
-
-## 운영 명령
-
-```bash
-python -m research_os.collector --mode feeds
-python -m research_os.collector --mode indicators
-python -m research_os.collector --mode feeds --sources kr-hk-economy --force
-python -m research_os.audit
-python -m research_os.backup export backups/full.json
-python -m research_os.backup restore backups/full.json
 python -m pytest -q
-node --check research_os/static/app.js
+node --test tests/client.test.cjs
+python -m research_os.operations
 ```
 
-`--force`는 수동 점검용이며 routine 작업은 source 주기를 따른다.
-백업에는 개인 메모가 포함되므로 비공개 보관. sessions·로그인 시도·서버 비밀정보는 백업하지 않는다.
-복구는 **빈 대상 DB에만** 허용하여 기존 연구자료를 덮어쓰지 않는다.
-서버 재시작 후 같은 Turso 환경변수를 유지하면 외부 DB 자료가 보존되는 구조이며 실제 Render 재시작 검증은 배포 후 수행해야 한다.
+Python42개 + JavaScript18개 통과. 브라우저에서 공개 메뉴11개, 한국어 검색·출처·기간·영문·페이지 이동·북마크 보호·390px 반응형 메뉴와 경제 차트를 확인했습니다. 실제 모바일 기기는 미검증입니다.
 
-## 알려진 제약과 후속 작업
+실제 RSS 로컬 재수집에서 뉴스33건 신규/17건 중복, BOK100건 중복을 확인했고 공식 환율517개를 저장·재조회했습니다. 로컬 전체는 뉴스669·보고서259·관측4252개로 운영 DB와 다릅니다. ZIP에는 DB·백업·비밀정보·가짜 seed가 없습니다.
 
-- 실 Render 배포, Turso 인증/FTS 실접속, GitHub schedule 첫 실행, 실제 모바일 브라우저 검증은 미완료.
-- 한국 기준금리·한국 월간 CPI·세계교역량·한국 GDP 등 일부 계열은 공식 인증·코드 검증 전이다.
-- 한국 수출입은 IMF IFS 지연 계열이다. 관세청 당월 속보치와 동일하지 않다.
-- KDI Open API는 인증키 필요. KITA/KIET/IEA/IMF/SEMI/SIA 보고서 자동 등록기는 미구현. 공식 페이지 연결 상태를 수집 성공과 구분한다.
-- EIA 공식 RSS는 robots 제한으로 미수집. 유가는 FRED의 EIA 실제 관측 계열을 사용한다.
-- PDF는 enclosure로 공식 제공된 링크만 저장. 상세 페이지 PDF 탐색/전망 숫자 자동 추출 없음.
-- 형식상 존재하지만 중단된 계열을 최신값으로 오인하지 않도록 관측일 표시. 공급기관 지연/수정은 가능하다.
-- 3천건/일 네트워크·원격 DB 부하 및 장기 저장은 실제 운영에서 추가 검증해야 한다.
-- full 백업은 CLI 수동 실행. 별도 외부 비공개 스토리지 예약 백업은 미연결.
-- 수집 이력은 계속 축적되므로 월별 DB 크기와 읽기·쓰기량을 확인하고 보존정책을 추가할 것.
-- 역할은 단일 개인 owner. 다중 사용자·공유·공개배포 기능 없음.
+## 운영·보존
 
-제약은 실제 코드/검증 범위를 기준으로 작성했다. 계정 연결 후 생성형 AI 없이 독립 운영할 수 있도록 구성했다.
+```bash
+python -m research_os.backup export backups/full.json
+python -m research_os.operations --require-remote
+```
 
+백업에는 개인 메모가 포함되므로 비공개로 보관합니다. 복원 도구는 빈 대상 DB만 허용합니다. 이번 수정에 DB 초기화나 복원은 필요하지 않습니다. 한국 기준금리·한국 CPI 등 미연결 계열 및 대부분 기관 보고서 수집기는 공식 인증/구현 전입니다. 상태 화면에서 정상 수집과 구분합니다. 모든 지표에 관측일·수집일·원천·단위를 표시하며 서로 다른 단위를 같은 차트에 합치지 않습니다.
 
-## v1.1 — 로그인 후 화면·상호작용 오류 보완
-
-- 서버 HTML/빈 응답을 무조건 JSON으로 읽지 않고 API 경로·HTTP 상태를 표시한다.
-- 탭 이동은 API 완료 전 즉시 그리며, 한 요청 실패가 다른 화면을 막지 않는다.
-- 화면별 필요한 요청만 실행하고 메타데이터는 짧게 재사용한다. 새로고침은 캐시를 비운다.
-- 소스 상태는 집계 SQL, 시계열은 일괄 조회로 변경하여 정보원·지표별 반복 원격 요청을 줄였다.
-- 서버 예외는 확인 코드가 있는 JSON 503으로 반환하며 상세 원인은 Render Logs에 기록한다.
-- 네트워크 지연/HTML 응답/빈 응답/부분 실패/탭 경합/잘못된 날짜의 클라이언트 회귀 테스트를 추가했다.
-- 실제 배포 서버의 원래 오류 원인은 URL·로그 확인 전이며 이 수정만으로 원격 해결을 확인했다고 보지 않는다.
-- 적용: 저장소 파일을 교체하여 push → Render 재배포. DB와 환경변수는 기존 값을 사용한다.
-- 화면 왼쪽 하단 v1.1 또는 /healthz의 version=2026.11.11-ui-fix1로 수정본 적용 여부를 확인한다.
-
-추가 클라이언트 테스트: `node --test tests/client.test.cjs`.
-
-## v1.2 — 공개 조회와 독립 수집 시작 안내
-
-- 뉴스·보고서·지표·신호 조회는 로그인 없이 열린다. 개인 메모/북마크/내보내기와 설정 변경은 선택 로그인 후 사용한다.
-- 익명 조회는 owner 레코드로 대체하지 않는다. 기존 개인 메모·태그·프로젝트·북마크는 공개되지 않는다.
-- 테이블 초기화, 정보원 초기화, 화면별 SELECT를 Turso `/v2/pipeline`의 단일 HTTP 요청으로 묶었다.
-- 주요 화면 조회는 세션 확인을 제외하면 화면당 한 번의 DB HTTP 왕복, 신호 화면은 세 번이다.
-- `새로고침`은 수집 명령이 아니다. 수집 이력이 0이면 그 사실과 GitHub Actions 실행 안내를 보여준다.
-- SQL 실행 오류/지연은 로그로 확인하며 반복 새로고침을 해결법으로 안내하지 않는다.
-
-### 실제 배포 점검 결과 (2026-11-11)
-
-`https://research-os-gd1l.onrender.com`의 v1.1에서 Turso 기본 연결 및 로그인 후 화면을 확인했다.
-연결된 DB의 뉴스·보고서가 0건이고, 모든 정보원의 성공/시도 횟수가 0/0이며 실행 이력 표도 비어 있었다.
-이것은 이 DB에서 수집기가 아직 실행되지 않았거나 수집기가 다른 DB를 대상으로 실행됐다는 뜻이다.
-이 소스의 로컬 검증 자료 895건이 사용자의 Turso에 자동 전송된 것은 아니다.
-
-### 빈 DB에 첫 자료 수집
-
-1. GitHub 저장소 → Settings → Secrets and variables → Actions → Repository secrets.
-2. `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`을 **Render가 쓰는 것과 같은 DB**의 값으로 설정한다.
-   Render Environment와 GitHub Secrets는 별도 시스템이며 자동 공유되지 않는다.
-3. Actions → Collect public research → Run workflow → mode `all` → 실행.
-4. 로그에서 소스별 `inserted`, 지표별 `count`를 확인한다. 스케줄 활성화를 기다릴 필요는 없다.
-5. 앱 수집 상태에서 최초 성공 시각과 실제 수집 로그가 생겼는지 확인한다.
-6. Actions 메뉴에 workflow가 없으면 `.github/workflows/collect.yml`이 **기본 브랜치**에 포함됐는지 확인한다.
-   macOS Finder의 일반 보기에서 `.github` 폴더가 숨겨질 수 있으므로 업로드 누락에 주의한다.
-
-Turso 쓰기 토큰을 채팅·스크린샷·로그에 붙이지 않는다. GitHub 연결 또는 저장소 주소가 있어야
-워크플로의 실제 설치·실행 상태를 추가 확인할 수 있다.
-
-v1.2의 일괄 DB 전송은 로컬 HTTP 프로토콜 시뮬레이션으로 검증했고 실제 배포 검증은 적용 후 필요하다.
-현재 /healthz의 version `2026.11.11-tts-v1.2`와 화면 v1.2로 적용 여부를 확인한다.
+과거 구현·설치 기록은 `docs/README_HISTORY.md`, 분석 방법은 `docs/RESEARCH_2_0.md`입니다. 새로운 모델·투자 전략은 추가하지 않았습니다.

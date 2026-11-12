@@ -19,8 +19,14 @@ def canonical_url(url):
   if str(e)=='Private URL':raise
  q=sorted((k,v) for k,v in parse_qsl(p.query,keep_blank_values=True) if not k.lower().startswith(('utm_','fbclid','gclid','mc_')))
  return urlunparse((p.scheme,p.netloc.lower(),p.path or '/',p.params,urlencode(q),''))
+def word_match(text,term):
+ term=unicodedata.normalize('NFKC',term).casefold();text=unicodedata.normalize('NFKC',text).casefold();pattern=re.escape(term)
+ if term and term[0].isascii() and term[0].isalnum():pattern=r'(?<![a-z0-9])'+pattern
+ if term and term[-1].isascii() and term[-1].isalnum():pattern+=r'(?![a-z0-9])'
+ return bool(re.search(pattern,text))
+
 def classify(title,fallback='기타'):
- t=title.lower();matches={k:[w for w in words if w.lower() in t] for k,words in RULES['categories'].items()};tags=[k for k,v in matches.items() if v]
+ t=title.lower();matches={k:[w for w in words if word_match(t,w)] for k,words in RULES['categories'].items()};tags=[k for k,v in matches.items() if v]
  category=max(matches,key=lambda k:len(matches[k])) if tags else fallback
  keywords=sorted(set(w for words in matches.values() for w in words))
  return category,tags or [fallback],keywords
@@ -31,7 +37,7 @@ def importance(title,published_at,source_kind,novel=True,at=None):
  if published_at:
   try:age=max(0,(at-datetime.fromisoformat(published_at)).total_seconds()/86400)
   except ValueError:pass
- factors={'relevance':min(1,len([t for t in tags if t!='기타'])/2),'keywords':min(1,len(words)/4),'event':float(any(x in title.lower() for x in RULES['event_words'])),'source':1.0 if source_kind=='report' else .6,'freshness':math.exp(-age/3) if age is not None else 0,'novelty':float(novel)}
+ factors={'relevance':min(1,len([t for t in tags if t!='기타'])/2),'keywords':min(1,len(words)/4),'event':float(any(word_match(title,x) for x in RULES['event_words'])),'source':1.0 if source_kind=='report' else .6,'freshness':math.exp(-age/3) if age is not None else 0,'novelty':float(novel)}
  detail={k:round(w[k]*v,3) for k,v in factors.items()};return round(min(100,sum(detail.values())),2),detail
 
 def similar(a,b):

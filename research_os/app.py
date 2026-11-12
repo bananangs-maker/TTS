@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse,JSONResponse,Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel,Field
 from .db import DB
+from .quality import focus_sql,candidate_availability
 from .core import now,RULES
 from .catalog import initialize,PENDING
 from .analytics import keyword_signals,indicator_stats
@@ -25,7 +26,7 @@ def verify_password(password,encoded):
 async def lifespan(app):
  if os.getenv('RENDER') and not os.getenv('TURSO_DATABASE_URL'):raise RuntimeError('Render requires Turso. Refusing ephemeral SQLite storage.')
  d=db();d.migrate();initialize(d);d.index_missing();yield
-app=FastAPI(title='RESEARCH OS',docs_url=None,redoc_url=None,openapi_url=None,lifespan=lifespan)
+app=FastAPI(title='TTS — Think Tank System',docs_url=None,redoc_url=None,openapi_url=None,lifespan=lifespan)
 @app.exception_handler(Exception)
 async def unhandled_api_error(request:Request,error:Exception):
  request_id=uuid.uuid4().hex[:12]
@@ -91,9 +92,11 @@ def record(b:Record,user=Depends(write_session)):
  old=d.one('SELECT * FROM records WHERE user_id=? AND item_id=?',(user['user_id'],b.id)) or {'bookmarked':0,'read':0,'note':'','tags':'','project':''};old.update(b.model_dump(exclude_none=True))
  d.execute('INSERT INTO records(user_id,item_id,bookmarked,read,note,tags,project,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,item_id) DO UPDATE SET bookmarked=excluded.bookmarked,read=excluded.read,note=excluded.note,tags=excluded.tags,project=excluded.project,updated_at=excluded.updated_at',(user['user_id'],b.id,int(old['bookmarked']),int(old['read']),old['note'],old['tags'],old['project'],now()));return {'ok':True}
 @app.get('/api/items')
-def items(q:str=Query('',max_length=500),kind:str='',category:str='',source:str='',language:str='',start:str='',end:str='',sort:str='latest',saved:bool=False,unread:bool=False,project:str='',offset:int=Query(0,ge=0,le=1000000),limit:int=Query(50,ge=1,le=100),user=Depends(public_session)):
+def items(q:str=Query('',max_length=500),kind:str='',category:str='',source:str='',language:str='',start:str='',end:str='',sort:str='latest',saved:bool=False,relevant:bool=False,unread:bool=False,project:str='',offset:int=Query(0,ge=0,le=1000000),limit:int=Query(50,ge=1,le=100),user=Depends(public_session)):
  if (saved or project) and not user['authenticated']:raise HTTPException(401,'개인 보관함은 로그인이 필요합니다.')
  d=db();where=['1=1'];args=[user['user_id']]
+ if relevant and kind!='report':
+  condition,parameters=focus_sql();where.append(condition);args.extend(parameters)
  for value,col in [(kind,'i.kind'),(source,'i.source_id'),(language,'s.language'),(project,'r.project')]:
   if value:where.append(col+'=?');args.append(value)
  if category:where.append('(i.category=? OR i.tags LIKE ?)');args.extend([category,'%"'+category+'"%'])
@@ -121,11 +124,11 @@ def overview(user=Depends(public_session)):
 @app.get('/api/sources')
 def sources(user=Depends(public_session)):
  d=db();cut=(datetime.now(timezone.utc)-timedelta(days=28)).isoformat()
- queries=[('SELECT * FROM sources ORDER BY language DESC,kind,name',()),("SELECT source_id,count(*) AS attempts,coalesce(sum(status!='failed'),0) AS successes,sum(fetched) AS fetched,sum(inserted) AS inserted,sum(duplicates) AS duplicates FROM runs WHERE started_at>=? GROUP BY source_id",(cut,)),('SELECT r.*,s.name FROM runs r JOIN sources s ON s.id=r.source_id ORDER BY started_at DESC LIMIT 50',()),('SELECT * FROM indicator_runs ORDER BY started_at DESC LIMIT 20',()),('SELECT * FROM source_candidates',())]
+ queries=[('SELECT * FROM sources ORDER BY language DESC,kind,name',()),("SELECT source_id,count(*) AS attempts,coalesce(sum(status!='failed'),0) AS successes,sum(fetched) AS fetched,sum(inserted) AS inserted,sum(duplicates) AS duplicates FROM runs WHERE started_at>=? GROUP BY source_id",(cut,)),('SELECT r.*,s.name FROM runs r JOIN sources s ON s.id=r.source_id ORDER BY started_at DESC LIMIT 50',()),('SELECT * FROM indicator_runs ORDER BY started_at DESC LIMIT 20',()),('SELECT * FROM source_candidates',()),('SELECT count(*) AS items,sum(kind=\'news\') AS news,sum(kind=\'report\') AS reports,max(collected_at) AS last_collection FROM items',()),('SELECT count(*) AS observations FROM observations',()),('SELECT id,name,status,updated_at,error FROM series',()),('SELECT id,started_at,finished_at,status,processed,error,version FROM analysis_runs ORDER BY started_at DESC LIMIT 5',())]
  results=d.execute_many(queries);rows=results[0]['rows'];reliability={r['source_id']:r for r in results[1]['rows']}
  for source in rows:source['reliability']=reliability.get(source['id'],{'attempts':0,'successes':0,'fetched':0,'inserted':0,'duplicates':0})
  attempted=any(source['last_attempt'] for source in rows)
- return {'sources':rows,'runs':results[2]['rows'],'indicator_runs':results[3]['rows'],'pending':[{**r,'reason':r['note']+(' · 목록 확인 '+r['status'] if r['checked_at'] else '')} for r in results[4]['rows']],'collection_state':'has_runs' if attempted else 'never_run','collection_help':'이 DB에 수집 실행 이력이 없습니다. GitHub Actions의 Collect public research를 실행하고 GitHub Secrets가 Render와 같은 Turso DB를 가리키는지 확인하세요.' if not attempted else None}
+ return {'system':{'storage_id':d.storage_id(),'records':results[5]['rows'][0],'observations':results[6]['rows'][0]['observations'],'series':results[7]['rows'],'analysis_runs':results[8]['rows']},'sources':rows,'runs':results[2]['rows'],'indicator_runs':results[3]['rows'],'pending':[{**candidate_availability(r),'reason':r['note']+(' · 목록 확인 '+r['status'] if r['checked_at'] else '')} for r in results[4]['rows']],'collection_state':'has_runs' if attempted else 'never_run','collection_help':'이 DB에 수집 실행 이력이 없습니다. GitHub Actions의 Collect public research를 실행하고 GitHub Secrets가 Render와 같은 Turso DB를 가리키는지 확인하세요.' if not attempted else None}
 class SourceSetting(BaseModel):
  id:str=Field(max_length=100)
  enabled:bool
@@ -154,7 +157,7 @@ def export(user=Depends(session)):
  return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type='application/json',headers={'Content-Disposition':'attachment; filename="research-os-archive.json"'})
 @app.get('/healthz')
 def health():
- try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.12-public-access-v2.0.1'}
+ try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.12-operations-fix','commit':os.getenv('RENDER_GIT_COMMIT',os.getenv('GITHUB_SHA')),'storage_id':db().storage_id()}
  except Exception:raise HTTPException(503,'Database unavailable')
 from .research.api import install as install_research
 install_research(app,db,public_session,write_session)

@@ -182,3 +182,41 @@ def test_backup_can_run_before_new_tables_exist(database,tmp_path):
  target=tmp_path/'old-schema-backup.json';backup(database,target)
  content=json.loads(target.read_text())
  assert 'items' in content['tables'] and 'feature_completion' not in content['tables']
+
+
+def test_empty_quant_history_is_bounded_to_two_queries(database,monkeypatch):
+ from research_os.research.empirical import linkage
+ calls=[];original=database.execute
+ def count(sql,args=()):calls.append(sql);return original(sql,args)
+ monkeypatch.setattr(database,'execute',count)
+ result=linkage(database,'반도체','DEXKOUS')
+ assert len(calls)==2 and all(x['status']=='insufficient_data' for x in result['lags'])
+ assert not any('FROM runs' in sql for sql in calls) # no ten-year coverage scan without completed news months
+
+
+def test_collector_preserves_revisions_before_pipeline_runs(database,monkeypatch):
+ monkeypatch.delenv('FRED_API_KEY',raising=False)
+ class Fetch:
+  value=1300
+  def get(self,url):return 200,f'observation_date,DEXKOUS\n2026-10-01,{self.value}\n2099-01-01,1\n'.encode(),{}
+ f=Fetch();entry=('DEXKOUS','FX','KRW','daily','Fed')
+ assert collect_series(database,f,entry,True)['count']==1
+ first=database.one('SELECT collected_at FROM observations')['collected_at']
+ f.value=1310;assert collect_series(database,f,entry,True)['status']=='success'
+ rows=database.all('SELECT * FROM observation_vintages ORDER BY available_at')
+ assert [r['value'] for r in rows]==[1300,1310] and rows[0]['available_at']==first
+ assert database.one("SELECT count(*) AS n FROM observations WHERE date='2099-01-01'")['n']==0
+
+
+def test_research_industry_does_not_inherit_general_feed_fallback():
+ r=item('[포토] 제6회 스마트금융 대상 수상자');r.update(category='거시경제',tags='["거시경제"]')
+ assert extract_features(r)['industries']==[]
+
+
+def test_successful_rss_without_analysis_is_not_a_zero_news_chart(database):
+ live_source(database);store_entries(database,[item('HBM 공장 증설')])
+ end=datetime.now(KST).date();d=trends(database,'반도체',7,end=end)
+ assert d['processing']['status']=='never_run' and d['processing']['pending_news']==1
+ assert all(p['value'] is None for p in d['timeline'])
+ process(database);d=trends(database,'반도체',7,end=end)
+ assert d['processing']['status']=='ready' and d['timeline'][-1]['value']==1

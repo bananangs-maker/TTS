@@ -53,7 +53,7 @@ class DB:
  def migrate(self):
   from .core import now
   queries=[(statement,()) for statement in Path(__file__).with_name('schema.sql').read_text().split(';') if statement.strip()]
-  queries.append(('INSERT OR IGNORE INTO schema_versions VALUES(1,?)',(now(),)))
+  queries.extend([('INSERT OR IGNORE INTO schema_versions VALUES(?,?)',(v,now())) for v in (1,2)])
   self.execute_many(queries)
  def index_missing(self):
   self.execute('INSERT INTO item_search(rowid,id,title,summary) SELECT i.rowid,i.id,i.title,i.summary FROM items i WHERE NOT EXISTS(SELECT 1 FROM item_search s WHERE s.rowid=i.rowid)')

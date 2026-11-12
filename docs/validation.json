@@ -315,5 +315,22 @@
     "live_version_observed": "2026.11.11-ui-fix1",
     "live_collection_state": "all 12 sources unverified; success/attempt counts 0/0; no collection rows; no items or observations shown",
     "v1_2_deployed": false
+  },
+  "v2_0": {
+    "verified_at": "2026-11-11T22:48:42.811010+00:00",
+    "python_tests_passed": 35,
+    "javascript_tests_passed": 13,
+    "local_pipeline": {
+      "version": "tts-research-2.0.0-39b0ea48ce",
+      "processed": 895,
+      "generated_reports": 4,
+      "scope": "existing genuine public-data local DB; not deployed DB"
+    },
+    "render_v2_deployed": false,
+    "github_v2_pushed": false,
+    "remote_v2_migration_verified": false,
+    "fred_registered_key_live_tested": false,
+    "new_browser_e2e": "not_completed",
+    "predictive_success": "not_established; insufficient point-in-time news history"
   }
 }

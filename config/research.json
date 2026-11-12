@@ -1,0 +1,385 @@
+{
+  "version": "tts-research-2.0.0",
+  "keywords": {
+    "반도체": {
+      "HBM": [
+        "hbm",
+        "고대역폭메모리",
+        "고대역폭 메모리",
+        "high bandwidth memory"
+      ],
+      "DRAM": [
+        "dram",
+        "디램",
+        "d램"
+      ],
+      "NAND": [
+        "nand",
+        "낸드"
+      ],
+      "CAPEX": [
+        "capex",
+        "capital expenditure",
+        "설비투자",
+        "설비 투자"
+      ],
+      "증설": [
+        "증설",
+        "capacity expansion",
+        "fab expansion"
+      ],
+      "감산": [
+        "감산",
+        "production cut",
+        "output cut"
+      ],
+      "웨이퍼": [
+        "웨이퍼",
+        "wafer"
+      ],
+      "반도체 소재": [
+        "반도체 소재",
+        "semiconductor materials"
+      ],
+      "포토레지스트": [
+        "포토레지스트",
+        "photoresist"
+      ],
+      "세정": [
+        "세정",
+        "cleaning"
+      ],
+      "패키징": [
+        "패키징",
+        "packaging"
+      ],
+      "첨단 패키징": [
+        "첨단 패키징",
+        "advanced packaging"
+      ]
+    },
+    "2차전지": {
+      "EV": [
+        "ev",
+        "electric vehicle",
+        "electric vehicles",
+        "전기차"
+      ],
+      "ESS": [
+        "ess",
+        "energy storage",
+        "에너지저장",
+        "에너지 저장"
+      ],
+      "LFP": [
+        "lfp",
+        "리튬인산철",
+        "인산철"
+      ],
+      "NCM": [
+        "ncm",
+        "니켈코발트망간"
+      ],
+      "NMP": [
+        "nmp",
+        "n-methyl-2-pyrrolidone"
+      ],
+      "전해액": [
+        "전해액",
+        "electrolyte"
+      ],
+      "리사이클링": [
+        "리사이클링",
+        "recycling",
+        "재활용"
+      ],
+      "가동률": [
+        "가동률",
+        "utilization rate",
+        "utilisation rate"
+      ],
+      "공급 과잉": [
+        "공급 과잉",
+        "공급과잉",
+        "oversupply"
+      ],
+      "증설": [
+        "증설",
+        "capacity expansion"
+      ],
+      "배터리 투자": [
+        "배터리 투자",
+        "battery investment"
+      ]
+    },
+    "거시경제": {
+      "기준금리": [
+        "기준금리",
+        "policy rate",
+        "federal funds",
+        "금리 인하",
+        "금리 인상"
+      ],
+      "환율": [
+        "환율",
+        "exchange rate",
+        "usd/krw",
+        "달러·원"
+      ],
+      "국채금리": [
+        "국채금리",
+        "국채 금리",
+        "treasury yield",
+        "bond yield"
+      ],
+      "국제유가": [
+        "국제유가",
+        "유가",
+        "oil price",
+        "brent",
+        "wti"
+      ],
+      "물가": [
+        "물가",
+        "inflation",
+        "cpi",
+        "ppi"
+      ],
+      "수출": [
+        "수출",
+        "export",
+        "exports"
+      ],
+      "경기침체": [
+        "경기침체",
+        "경기 침체",
+        "recession"
+      ],
+      "경제성장률": [
+        "경제성장률",
+        "gdp growth",
+        "성장률"
+      ]
+    }
+  },
+  "positive": [
+    "투자 확대",
+    "투자확대",
+    "증설",
+    "공급 부족",
+    "공급부족",
+    "수요 증가",
+    "수요증가",
+    "가동률 상승",
+    "수주 증가",
+    "생산 확대",
+    "성장률 상향",
+    "investment expansion",
+    "capacity expansion",
+    "demand growth",
+    "rising demand",
+    "supply shortage",
+    "production increase",
+    "upward revision"
+  ],
+  "negative": [
+    "감산",
+    "투자 축소",
+    "투자축소",
+    "투자 연기",
+    "투자연기",
+    "공급 과잉",
+    "공급과잉",
+    "수요 감소",
+    "수요감소",
+    "가동률 하락",
+    "재고 증가",
+    "성장률 하향",
+    "production cut",
+    "output cut",
+    "investment cut",
+    "investment delay",
+    "oversupply",
+    "demand decline",
+    "falling demand",
+    "inventory buildup",
+    "downward revision"
+  ],
+  "uncertain": [
+    "않",
+    "아니",
+    "없",
+    "부인",
+    "미정",
+    "우려",
+    "가능성",
+    "전망",
+    "예상",
+    "검토",
+    "not",
+    "no",
+    "deny",
+    "denies",
+    "may",
+    "could",
+    "plans",
+    "plan",
+    "expected",
+    "forecast"
+  ],
+  "companies": {
+    "삼성전자": [
+      "삼성전자",
+      "samsung electronics"
+    ],
+    "SK하이닉스": [
+      "sk하이닉스",
+      "sk hynix",
+      "하이닉스"
+    ],
+    "TSMC": [
+      "tsmc"
+    ],
+    "삼성SDI": [
+      "삼성sdi",
+      "samsung sdi"
+    ],
+    "LG에너지솔루션": [
+      "lg에너지솔루션",
+      "lg energy solution"
+    ],
+    "CATL": [
+      "catl"
+    ],
+    "Panasonic": [
+      "panasonic",
+      "파나소닉"
+    ],
+    "Intel": [
+      "intel",
+      "인텔"
+    ],
+    "Micron": [
+      "micron",
+      "마이크론"
+    ],
+    "현대차": [
+      "현대차",
+      "hyundai motor"
+    ],
+    "Tesla": [
+      "tesla",
+      "테슬라"
+    ]
+  },
+  "countries": {
+    "한국": [
+      "한국",
+      "korea"
+    ],
+    "미국": [
+      "미국",
+      "united states",
+      "u.s."
+    ],
+    "중국": [
+      "중국",
+      "china"
+    ],
+    "일본": [
+      "일본",
+      "japan"
+    ],
+    "대만": [
+      "대만",
+      "taiwan"
+    ],
+    "EU": [
+      "유럽연합",
+      "european union"
+    ]
+  },
+  "events": {
+    "investment_announcement": [
+      "투자 발표",
+      "투자 계획",
+      "투자한다",
+      "investment announcement",
+      "invests"
+    ],
+    "capex_increase": [
+      "capex 증액",
+      "투자 확대",
+      "설비투자 확대",
+      "capex increase"
+    ],
+    "capex_cut": [
+      "capex 축소",
+      "투자 축소",
+      "capex cut"
+    ],
+    "factory_expansion": [
+      "증설",
+      "공장 착공",
+      "capacity expansion",
+      "new factory"
+    ],
+    "shutdown": [
+      "가동 중단",
+      "가동중단",
+      "공장 폐쇄",
+      "shutdown",
+      "plant closure"
+    ],
+    "investment_delay": [
+      "투자 연기",
+      "투자연기",
+      "투자 지연",
+      "investment delay"
+    ],
+    "production_cut": [
+      "감산",
+      "production cut",
+      "output cut"
+    ],
+    "price_increase": [
+      "가격 인상",
+      "가격인상",
+      "price increase",
+      "price hike"
+    ],
+    "price_cut": [
+      "가격 인하",
+      "가격인하",
+      "price cut"
+    ],
+    "policy_announcement": [
+      "정책 발표",
+      "법안 통과",
+      "policy announcement",
+      "bill passed"
+    ],
+    "subsidy_tariff": [
+      "보조금",
+      "관세",
+      "tariff",
+      "subsidy"
+    ],
+    "supply_contract": [
+      "공급계약",
+      "공급 계약",
+      "supply agreement",
+      "supply contract"
+    ]
+  },
+  "min_history_days": 35,
+  "min_coverage": 0.7,
+  "signal_min_count": 5,
+  "signal_z": 2.0,
+  "signal_growth": 1.0,
+  "sentiment_jump": 30,
+  "min_sentiment_sample": 20,
+  "quant_min_pairs": 36,
+  "quant_train": 36,
+  "quant_oos": 12
+}

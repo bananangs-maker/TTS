@@ -153,8 +153,11 @@ def export(user=Depends(session)):
  return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type='application/json',headers={'Content-Disposition':'attachment; filename="research-os-archive.json"'})
 @app.get('/healthz')
 def health():
- try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.11-tts-v1.2'}
+ try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.11-tts-v2.0'}
  except Exception:raise HTTPException(503,'Database unavailable')
+from .research.api import install as install_research
+install_research(app,db,public_session,write_session)
+
 app.mount('/static',StaticFiles(directory=STATIC),name='static')
 @app.get('/')
 def home():return FileResponse(STATIC/'index.html')

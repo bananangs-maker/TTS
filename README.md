@@ -1,4 +1,13 @@
-# RESEARCH OS
+# TTS — Think Tank System
+
+## 2.0 업데이트
+
+규칙 기반 산업 트렌드·확장/위축 지수, 이벤트 후보 DB, 시점 정렬 실증 연구, 기간 보고서, 개인 연구 기록, JANUS CSV 실험 기반을 추가했습니다. **Python 35개 + JavaScript 13개 테스트 통과.** 로컬 실제 자료 895건으로 분석 파이프라인을 실행했습니다. 장기 표본 부족을 예측 성공으로 표시하지 않습니다.
+
+기존 사용자는 **[UPDATE_TTS_2_0.md](UPDATE_TTS_2_0.md)** 순서로 전체 코드와 Actions를 함께 업데이트합니다. 새 DB를 만들지 않습니다. 상세 구현·제한은 [docs/RESEARCH_2_0.md](docs/RESEARCH_2_0.md) 참고.
+
+**2.0 소스 패키지 완성 / Render 반영 전.** GitHub 쓰기와 Render 관리 연결이 없어 이번 버전의 업로드·원격 마이그레이션·배포 검증은 수행하지 않았습니다. 아래 초기 설치 기록은 과거 검증 시점과 구분해서 읽어 주세요.
+
 
 외부 공개자료를 자동 수집하고 규칙·통계로 변화를 관측하는 개인 경제·산업 리서치 웹앱.
 **Render + Turso(libSQL) + GitHub Actions + Python. Supabase / LLM / 생성형 AI API 미사용.**
@@ -58,7 +67,7 @@ turso db tokens create research-os
 
 ## GitHub + Render 배포
 
-1. 전체 코드를 **새 GitHub 저장소**에 push한다. `data/`, `.env`, `.venv`, backups는 제외되어 있다.
+1. 전체 코드를 GitHub 저장소에 push한다. 기존 사용자는 같은 저장소를 업데이트한다. `data/`, `.env`, `.venv`, backups는 제외되어 있다.
 2. GitHub repository → Settings → Secrets and variables → Actions에 다음을 등록한다.
    - `TURSO_DATABASE_URL`
    - `TURSO_AUTH_TOKEN`

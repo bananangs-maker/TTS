@@ -3,9 +3,10 @@ import argparse,json,os
 from pathlib import Path
 from .db import DB
 from .core import now
-TABLES=['schema_versions','source_candidates','sources','items','runs','series','observations','indicator_runs','records','forecast_releases']
+TABLES=['schema_versions','source_candidates','sources','items','runs','series','observations','indicator_runs','records','forecast_releases','article_features','article_keywords','research_daily','research_dictionary','industry_events','event_sources','event_reviews','observation_vintages','detected_signals','analysis_runs','research_projects','research_hypotheses','research_experiments','research_notes','generated_reports','janus_datasets','janus_observations','duplicate_origins','event_links','feature_completion']
 def backup(db,path):
- payload={'format':'research-os-backup-v1','exported_at':now(),'tables':{t:db.all('SELECT * FROM '+t) for t in TABLES}}
+ available={r['name'] for r in db.all("SELECT name FROM sqlite_master WHERE type='table'")}
+ payload={'format':'research-os-backup-v1','exported_at':now(),'tables':{t:db.all('SELECT * FROM '+t) for t in TABLES if t in available}}
  p=Path(path);p.parent.mkdir(parents=True,exist_ok=True)
  with open(p,'w',encoding='utf-8') as f:json.dump(payload,f,ensure_ascii=False)
  os.chmod(p,0o600)

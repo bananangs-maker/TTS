@@ -332,5 +332,23 @@
     "fred_registered_key_live_tested": false,
     "new_browser_e2e": "not_completed",
     "predictive_success": "not_established; insufficient point-in-time news history"
+  },
+  "public_access_v2_0_1": {
+    "verified_at": "2026-11-12T12:15:56.246954+00:00",
+    "python_passed": 36,
+    "javascript_passed": 18,
+    "local_browser_public_menus": 11,
+    "local_browser_login_forms": 0,
+    "local_browser_public_errors": 0,
+    "private_menus_gate_verified": 3,
+    "render_before_patch": {
+      "version": "2026.11.11-tts-v2.0",
+      "anonymous_public_api_http200": true,
+      "news_and_reports_browser": true,
+      "economic_data": "FRED timeout; no observations",
+      "quant": "linkage request timeout"
+    },
+    "render_patch_deployed": false,
+    "blocker": "GitHub and Render connections unavailable"
   }
 }

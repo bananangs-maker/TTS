@@ -92,6 +92,7 @@ def record(b:Record,user=Depends(write_session)):
  d.execute('INSERT INTO records(user_id,item_id,bookmarked,read,note,tags,project,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,item_id) DO UPDATE SET bookmarked=excluded.bookmarked,read=excluded.read,note=excluded.note,tags=excluded.tags,project=excluded.project,updated_at=excluded.updated_at',(user['user_id'],b.id,int(old['bookmarked']),int(old['read']),old['note'],old['tags'],old['project'],now()));return {'ok':True}
 @app.get('/api/items')
 def items(q:str=Query('',max_length=500),kind:str='',category:str='',source:str='',language:str='',start:str='',end:str='',sort:str='latest',saved:bool=False,unread:bool=False,project:str='',offset:int=Query(0,ge=0,le=1000000),limit:int=Query(50,ge=1,le=100),user=Depends(public_session)):
+ if (saved or project) and not user['authenticated']:raise HTTPException(401,'개인 보관함은 로그인이 필요합니다.')
  d=db();where=['1=1'];args=[user['user_id']]
  for value,col in [(kind,'i.kind'),(source,'i.source_id'),(language,'s.language'),(project,'r.project')]:
   if value:where.append(col+'=?');args.append(value)
@@ -153,7 +154,7 @@ def export(user=Depends(session)):
  return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type='application/json',headers={'Content-Disposition':'attachment; filename="research-os-archive.json"'})
 @app.get('/healthz')
 def health():
- try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.11-tts-v2.0'}
+ try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.12-public-access-v2.0.1'}
  except Exception:raise HTTPException(503,'Database unavailable')
 from .research.api import install as install_research
 install_research(app,db,public_session,write_session)

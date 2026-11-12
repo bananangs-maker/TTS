@@ -166,7 +166,7 @@ def test_public_read_does_not_expose_owner_archive(database):
   assert c.get('/api/me').json()['authenticated'] is False
   item=c.get('/api/items').json()['items'][0]
   assert item['note']=='' and item['personal_tags']=='' and item['project']=='' and item['bookmarked']==0
-  assert c.get('/api/items?saved=true').json()['total']==0
+  assert c.get('/api/items?saved=true').status_code==401
   assert c.get('/api/overview').json()['saved_items']==[]
   assert c.post('/api/record',json={'id':entry['id'],'bookmarked':True}).status_code==401
   assert c.get('/api/export').status_code==401
@@ -205,3 +205,18 @@ def test_public_read_can_start_without_password_hash(database,monkeypatch):
   assert c.get('/api/me').status_code==200
   assert c.get('/api/items').status_code==200
   assert c.post('/api/login',json={'username':'researcher','password':'anything'}).status_code==401
+
+
+def test_public_menu_reads_with_expired_cookie_and_private_writes_stay_closed(database):
+ entry=sample()[0];store_entries(database,[entry])
+ database.execute('INSERT INTO records VALUES(?,?,?,?,?,?,?,?)',('owner',entry['id'],1,1,'HIDDEN MEMO','private-tag','private-project','2026-11-11T00:00:00+00:00'))
+ with TestClient(app) as c:
+  c.cookies.set('research_session','expired-or-invalid-session')
+  public=['/','/api/me','/api/items?kind=news','/api/items?kind=report','/api/overview','/api/economy','/api/signals','/api/sources','/api/research/config','/api/research/trends','/api/research/events','/api/research/linkage','/api/research/reports','/api/research/signals']
+  for path in public:
+   r=c.get(path,follow_redirects=False);assert r.status_code==200,(path,r.text[:100]);assert 'HIDDEN MEMO' not in r.text and 'private-tag' not in r.text
+  for path in ['/api/items?saved=true','/api/items?project=private-project','/api/export','/api/research/archive','/api/research/archive/export']:
+   assert c.get(path,follow_redirects=False).status_code==401
+  for path,payload in [('/api/record',{'id':entry['id'],'note':'ATTACK'}),('/api/source',{'id':entry['source_id'],'enabled':False,'interval_minutes':180}),('/api/research/project',{'name':'ATTACK'}),('/api/research/report',{'period':'daily'}),('/api/janus/import',{'symbol':'NEWS','kind':'news_signal','source_url':'https://example.org','csv_text':'date,value,available_at'})]:
+   assert c.post(path,json=payload,follow_redirects=False).status_code==401,path
+  assert database.one('SELECT note FROM records WHERE user_id=?',('owner',))['note']=='HIDDEN MEMO'

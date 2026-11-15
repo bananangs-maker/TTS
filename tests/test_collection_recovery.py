@@ -120,3 +120,22 @@ def test_production_numeric_value_mismatch_is_not_accepted(db,monkeypatch):
  with pytest.raises(ValueError,match='date/value differs'):verify_production(db,'https://research-os-gd1l.onrender.com')
  payloads['/api/economy']['series'][0]['points'][0]['value']=1400
  assert verify_production(db,'https://research-os-gd1l.onrender.com')['verified']
+
+
+def test_policy_pause_preserves_articles_and_applies_only_once(db):
+ source=next(s for s in SOURCES if s['id']=='storage')
+ # Reproduce an existing deployment before the one-time policy hold.
+ db.execute('DELETE FROM schema_versions WHERE version=3')
+ db.execute("UPDATE sources SET enabled=1,status='failed' WHERE id='storage'")
+ store_entries(db,parse_feed(feed(),source)[0])
+ initialize(db)
+ held=db.one("SELECT * FROM sources WHERE id='storage'")
+ assert held['enabled']==0 and held['status']=='disabled'
+ assert db.one("SELECT count(*) AS n FROM items WHERE source_id='storage'")['n']==1
+ class MustNotFetch:
+  def get(self,*args):raise AssertionError('paused source must not make network requests')
+ assert collect_source(db,MustNotFetch(),source,True)['status']=='disabled'
+ # An administrator can later re-enable after a policy review; startup preserves that.
+ db.execute("UPDATE sources SET enabled=1 WHERE id='storage'")
+ initialize(db)
+ assert db.one("SELECT enabled FROM sources WHERE id='storage'")['enabled']==1

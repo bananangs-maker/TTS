@@ -153,7 +153,7 @@ def test_migration_backup_and_restore_research(database,tmp_path):
  path=tmp_path/'research-backup.json';backup(database,path);other=DB(path=str(tmp_path/'restore.db'),url='');restore(other,path)
  assert other.one('SELECT count(*) AS n FROM article_features')['n']==1
  assert other.one('SELECT count(*) AS n FROM industry_events')['n']>=1
- assert other.one('SELECT max(version) AS v FROM schema_versions')['v']==2
+ assert other.one('SELECT max(version) AS v FROM schema_versions')['v']==3
 
 
 def test_signal_unit_consistency_and_idempotence(database):

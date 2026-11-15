@@ -1,4 +1,5 @@
 import hashlib
+from .core import now
 """Official RSS and reviewed report-list metadata. No article-body or PDF fetch."""
 SOURCES=[
  dict(id='kr-hk-economy',name='한국경제 · 경제',url='https://www.hankyung.com/feed/economy',homepage='https://www.hankyung.com/feed',kind='news',category='거시경제',language='ko',interval_minutes=180),
@@ -55,4 +56,8 @@ def initialize(db):
   queries.append(('INSERT INTO source_candidates(id,name,url,method,status,note) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET note=excluded.note',('candidate-'+hashlib.sha256(n.encode()).hexdigest()[:16],n,url,'official_page_review','unverified',note)))
  for name in ('한국무역협회 국제무역통상연구원','산업연구원'):
   queries.append(("UPDATE source_candidates SET status='implemented',note='공식 목록 수집기 구현 · 실제 상태는 정보원 실행 이력 참조' WHERE name=?",(name,)))
+ # One-time pause after repeated production robots verification failures.
+ # Keep all stored articles, error history and the administrator's later choices.
+ queries.append(("UPDATE sources SET enabled=0,status='disabled',error=? WHERE id='storage' AND NOT EXISTS(SELECT 1 FROM schema_versions WHERE version=3)",('자동 수집 보류: 운영 환경에서 robots.txt 검증 반복 실패 · 기존 자료 보존',)))
+ queries.append(('INSERT OR IGNORE INTO schema_versions(version,applied_at) VALUES(3,?)',(now(),)))
  db.execute_many(queries)

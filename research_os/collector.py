@@ -121,7 +121,9 @@ def store_entries(db,entries,metrics=None):
 
 def collect_source(db,fetcher,source,force=False):
  old=db.one('SELECT * FROM sources WHERE id=?',(source['id'],));start=now();run_id=uuid.uuid4().hex
- if not old['enabled']:return {'source':source['id'],'status':'disabled'}
+ if not old['enabled']:
+  db.execute("UPDATE sources SET status='disabled' WHERE id=?",(source['id'],))
+  return {'source':source['id'],'status':'disabled','reason':old['error']}
  if not force and old['last_attempt'] and (datetime.now(timezone.utc)-datetime.fromisoformat(old['last_attempt'])).total_seconds()<old['interval_minutes']*60:return {'source':source['id'],'status':'not_due'}
  fetched=inserted=duplicates=invalid=0;error=None;status='success';stage='fetch';metrics={};latest_published=None
  try:
@@ -215,3 +217,4 @@ if __name__=='__main__':
     summary.write('| '+' | '.join(str(v if v is not None else '').replace('|','/').replace('\n',' ') for v in values)+' |\n')
  if failures:print(f'::warning::{failures} collection tasks failed. Review source/indicator logs; partial success is not full coverage.')
  if failures:raise SystemExit(1)
+ if any(r.get('status')=='busy' for r in results):raise SystemExit(75)

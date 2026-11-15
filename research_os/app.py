@@ -124,9 +124,11 @@ def overview(user=Depends(public_session)):
 @app.get('/api/sources')
 def sources(user=Depends(public_session)):
  d=db();cut=(datetime.now(timezone.utc)-timedelta(days=28)).isoformat()
- queries=[('SELECT * FROM sources ORDER BY language DESC,kind,name',()),("SELECT source_id,count(*) AS attempts,coalesce(sum(status!='failed'),0) AS successes,sum(fetched) AS fetched,sum(inserted) AS inserted,sum(duplicates) AS duplicates FROM runs WHERE started_at>=? GROUP BY source_id",(cut,)),('SELECT r.*,s.name FROM runs r JOIN sources s ON s.id=r.source_id ORDER BY started_at DESC LIMIT 50',()),('SELECT * FROM indicator_runs ORDER BY started_at DESC LIMIT 20',()),('SELECT * FROM source_candidates',()),('SELECT count(*) AS items,sum(kind=\'news\') AS news,sum(kind=\'report\') AS reports,max(collected_at) AS last_collection FROM items',()),('SELECT count(*) AS observations FROM observations',()),('SELECT id,name,status,updated_at,error FROM series',()),('SELECT id,started_at,finished_at,status,processed,error,version FROM analysis_runs ORDER BY started_at DESC LIMIT 5',())]
+ queries=[('SELECT s.*,(SELECT max(published_at) FROM items WHERE source_id=s.id) AS latest_stored FROM sources s ORDER BY language DESC,kind,name',()),("SELECT source_id,count(*) AS attempts,coalesce(sum(status!='failed'),0) AS successes,sum(fetched) AS fetched,sum(inserted) AS inserted,sum(duplicates) AS duplicates FROM runs WHERE started_at>=? GROUP BY source_id",(cut,)),('SELECT r.*,s.name,d.payload AS diagnostics FROM runs r JOIN sources s ON s.id=r.source_id LEFT JOIN collection_diagnostics d ON d.run_id=r.id ORDER BY started_at DESC LIMIT 50',()),('SELECT * FROM indicator_runs ORDER BY started_at DESC LIMIT 20',()),("SELECT * FROM source_candidates WHERE status!='implemented'",()),('SELECT count(*) AS items,sum(kind=\'news\') AS news,sum(kind=\'report\') AS reports,max(collected_at) AS last_collection FROM items',()),('SELECT count(*) AS observations FROM observations',()),('SELECT id,name,status,updated_at,error FROM series',()),('SELECT id,started_at,finished_at,status,processed,error,version FROM analysis_runs ORDER BY started_at DESC LIMIT 5',())]
  results=d.execute_many(queries);rows=results[0]['rows'];reliability={r['source_id']:r for r in results[1]['rows']}
- for source in rows:source['reliability']=reliability.get(source['id'],{'attempts':0,'successes':0,'fetched':0,'inserted':0,'duplicates':0})
+ for source in rows:
+  source['reliability']=reliability.get(source['id'],{'attempts':0,'successes':0,'fetched':0,'inserted':0,'duplicates':0})
+  source['collection_delayed']=bool(source['enabled'] and (not source['last_success'] or datetime.now(timezone.utc)-datetime.fromisoformat(source['last_success'])>timedelta(minutes=max(720,source['interval_minutes']*2))))
  attempted=any(source['last_attempt'] for source in rows)
  return {'system':{'storage_id':d.storage_id(),'records':results[5]['rows'][0],'observations':results[6]['rows'][0]['observations'],'series':results[7]['rows'],'analysis_runs':results[8]['rows']},'sources':rows,'runs':results[2]['rows'],'indicator_runs':results[3]['rows'],'pending':[{**candidate_availability(r),'reason':r['note']+(' · 목록 확인 '+r['status'] if r['checked_at'] else '')} for r in results[4]['rows']],'collection_state':'has_runs' if attempted else 'never_run','collection_help':'이 DB에 수집 실행 이력이 없습니다. GitHub Actions의 Collect public research를 실행하고 GitHub Secrets가 Render와 같은 Turso DB를 가리키는지 확인하세요.' if not attempted else None}
 class SourceSetting(BaseModel):
@@ -157,7 +159,7 @@ def export(user=Depends(session)):
  return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type='application/json',headers={'Content-Disposition':'attachment; filename="research-os-archive.json"'})
 @app.get('/healthz')
 def health():
- try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.12-operations-fix','commit':os.getenv('RENDER_GIT_COMMIT',os.getenv('GITHUB_SHA')),'storage_id':db().storage_id()}
+ try:db().one('SELECT 1 AS ok');return {'status':'ok','storage':'turso' if db().remote else 'local-development','version':'2026.11.16-collection-recovery','commit':os.getenv('RENDER_GIT_COMMIT',os.getenv('GITHUB_SHA')),'storage_id':db().storage_id()}
  except Exception:raise HTTPException(503,'Database unavailable')
 from .research.api import install as install_research
 install_research(app,db,public_session,write_session)

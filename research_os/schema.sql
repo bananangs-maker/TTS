@@ -43,3 +43,5 @@ CREATE TABLE IF NOT EXISTS event_links(user_id TEXT NOT NULL,event_id TEXT NOT N
 CREATE INDEX IF NOT EXISTS research_daily_lookup ON research_daily(version,industry,day,keyword);
 CREATE INDEX IF NOT EXISTS events_type_date ON industry_events(event_type,announcement_date);
 CREATE TABLE IF NOT EXISTS feature_completion(item_id TEXT NOT NULL,version TEXT NOT NULL,completed_at TEXT NOT NULL,PRIMARY KEY(item_id,version));
+
+CREATE TABLE IF NOT EXISTS collection_diagnostics(run_id TEXT PRIMARY KEY,source_id TEXT NOT NULL,checked_at TEXT NOT NULL,payload TEXT NOT NULL);

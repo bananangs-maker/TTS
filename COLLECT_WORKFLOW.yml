@@ -1,14 +1,28 @@
 name: Collect public research
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/collect.yml'
+      - 'research_os/collector.py'
+      - 'research_os/catalog.py'
+      - 'research_os/report_sources.py'
+      - 'research_os/db.py'
+      - 'research_os/schema.sql'
+      - 'research_os/operations.py'
   schedule:
-    - cron: '17 1,7,13,19 * * *' # UTC → 10:17,16:17,22:17,04:17 KST
+    - cron: '17 1,7,13,19 * * *'
   workflow_dispatch:
     inputs:
       mode:
-        description: Sources to update
+        description: Collection scope
         type: choice
         options: [all, feeds, indicators]
         default: all
+      force:
+        description: Revalidate source payloads without conditional cache headers
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -17,27 +31,32 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
       TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
       TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
       FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+      EXPECTED_STORAGE_ID: bda7b1d386be
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: pip
       - run: pip install -r requirements.txt
-      - name: Check persistent storage configuration
-        run: python -c "import os; assert os.environ.get('TURSO_DATABASE_URL') and os.environ.get('TURSO_AUTH_TOKEN'), 'Turso secrets must be configured'"
-      - name: Collect independently of Render
+      - name: Check database configuration
+        run: python -c "import os; assert os.environ.get('TURSO_DATABASE_URL') and os.environ.get('TURSO_AUTH_TOKEN'), 'Configure Turso secrets'"
+      - name: Report API configuration without revealing secrets
+        run: python -c "import os; print('FRED_API_KEY configured:', bool(os.environ.get('FRED_API_KEY')))"
+      - name: Verify target before collection
+        run: python -m research_os.operations --require-remote --identity-only
+      - name: Collect and verify stored data
         env:
           COLLECT_MODE: ${{ inputs.mode || 'all' }}
-        run: python -m research_os.collector --mode "$COLLECT_MODE"
-      - name: Verify preserved records and storage identity
+          COLLECT_FORCE: ${{ inputs.force || 'false' }}
+        run: |
+          args=(--mode "$COLLECT_MODE")
+          if [ "$COLLECT_FORCE" = "true" ]; then args+=(--force); fi
+          python -m research_os.collector "${args[@]}"
+      - name: Verify storage and production reads even after partial failure
         if: always()
-        run: python -m research_os.operations --require-remote
-      - name: Build research features, signals and period reports
-        if: always() && env.TURSO_DATABASE_URL != '' && env.TURSO_AUTH_TOKEN != ''
-        run: python -m research_os.research.pipeline
+        run: python -m research_os.operations --require-remote --production-url https://research-os-gd1l.onrender.com

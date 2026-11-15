@@ -1,5 +1,5 @@
 import hashlib
-"""Only publisher-documented RSS. Titles/links only for news; no article fetch."""
+"""Official RSS and reviewed report-list metadata. No article-body or PDF fetch."""
 SOURCES=[
  dict(id='kr-hk-economy',name='한국경제 · 경제',url='https://www.hankyung.com/feed/economy',homepage='https://www.hankyung.com/feed',kind='news',category='거시경제',language='ko',interval_minutes=180),
  dict(id='kr-hk-it',name='한국경제 · IT',url='https://www.hankyung.com/feed/it',homepage='https://www.hankyung.com/feed',kind='news',category='기타',language='ko',interval_minutes=180),
@@ -12,7 +12,9 @@ SOURCES=[
  dict(id='fed',name='Federal Reserve',url='https://www.federalreserve.gov/feeds/press_all.xml',homepage='https://www.federalreserve.gov/feeds/feeds.htm',kind='news',category='정책·통상',language='en',interval_minutes=360),
  dict(id='semi-digest',name='Semiconductor Digest',url='https://www.semiconductor-digest.com/feed/',homepage='https://www.semiconductor-digest.com/',kind='news',category='반도체',language='en',interval_minutes=360),
  dict(id='electrive',name='electrive',url='https://www.electrive.com/feed/',homepage='https://www.electrive.com/',kind='news',category='2차전지',language='en',interval_minutes=360),
- dict(id='storage',name='Energy-Storage.news',url='https://www.energy-storage.news/feed/',homepage='https://www.energy-storage.news/',kind='news',category='2차전지',language='en',interval_minutes=360)
+ dict(id='storage',name='Energy-Storage.news',url='https://www.energy-storage.news/feed/',homepage='https://www.energy-storage.news/',kind='news',category='2차전지',language='en',interval_minutes=360),
+ dict(id='kiet-issues',name='산업연구원 · i-KIET',url='https://www.kiet.re.kr/research/issueList',homepage='https://www.kiet.re.kr/',kind='report',category='거시경제',language='ko',interval_minutes=720,method='kiet_list'),
+ dict(id='kita-reports',name='한국무역협회 · 연구보고서',url='https://www.kita.net/researchTrade/report/reportMain/reportMainList.do',homepage='https://www.kita.net/',kind='report',category='정책·통상',language='ko',interval_minutes=720,method='kita_list')
 ]
 SERIES=[
  ('DEXKOUS','USD / KRW','원 / USD','daily','Federal Reserve H.10'),
@@ -30,8 +32,6 @@ SERIES=[
  ('VALEXPKRM052N','한국 상품 수출 · 비계절조정','백만 USD','monthly','IMF IFS'),
  ('VALIMPKRM052N','한국 상품 수입 · 비계절조정','백만 USD','monthly','IMF IFS')]
 PENDING=[
- ('한국무역협회 국제무역통상연구원','수집 조건 및 목록 API 미검증','https://www.kita.net/'),
- ('산업연구원','RSS/API와 자동 수집 조건 미검증','https://www.kiet.re.kr/'),
  ('KDI','공식 Open API 인증키 필요','https://www.kdi.re.kr/share/openAPI'),
  ('KOSIS · 한국 수출입·생산','API 키·통계표 코드 검증 필요','https://kosis.kr/openapi/'),
  ('한국 월간 CPI','검토한 FRED 후보 CSV는 404 · ECOS/KOSIS 공식 계열 인증·검증 필요','https://kosis.kr/openapi/'),
@@ -47,10 +47,12 @@ PENDING=[
 def initialize(db):
  queries=[]
  for s in SOURCES:
-  policy='공식 RSS · 개인 비공개 열람용 · 제목·원문 링크 보존 · 전문 미저장'
+  policy='공식 목록 · 제목·발행일·원문 링크만 수집 · 전문/PDF 미수집 · 날짜는 KST 기준' if s.get('method') else '공식 RSS · 개인 비공개 열람용 · 제목·원문 링크 보존 · 전문 미저장'
   queries.append(('INSERT INTO sources(id,name,url,homepage,kind,category,language,interval_minutes,policy) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,url=excluded.url,policy=excluded.policy',(s['id'],s['name'],s['url'],s['homepage'],s['kind'],s['category'],s['language'],s['interval_minutes'],policy)))
  for i,n,u,f,p in SERIES:queries.append(('INSERT INTO series(id,name,unit,frequency,provider,url) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',(i,n,u,f,p,'https://fred.stlouisfed.org/series/'+i)))
 
  for idx,(n,note,url) in enumerate(PENDING):
   queries.append(('INSERT INTO source_candidates(id,name,url,method,status,note) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET note=excluded.note',('candidate-'+hashlib.sha256(n.encode()).hexdigest()[:16],n,url,'official_page_review','unverified',note)))
+ for name in ('한국무역협회 국제무역통상연구원','산업연구원'):
+  queries.append(("UPDATE source_candidates SET status='implemented',note='공식 목록 수집기 구현 · 실제 상태는 정보원 실행 이력 참조' WHERE name=?",(name,)))
  db.execute_many(queries)

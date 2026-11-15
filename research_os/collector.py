@@ -18,29 +18,34 @@ def safe_error(error):
  return re.sub(r'(?i)(api_key=)[^&\s\"\']+',r'\1[REDACTED]',text)[:300]
 
 class Fetcher:
- def __init__(self):self.session=requests.Session();self.robots={};self.last={};self.retry_count=0;self.unavailable={}
+ def __init__(self):self.session=requests.Session();self.robots={};self.last={};self.retry_count=0
  def raw(self,url,headers=None):
   p=urlparse(url)
   if p.scheme!='https' or p.hostname not in ALLOWED or p.port not in (None,443) or p.username:raise ValueError('URL outside allowlist')
   for retry in range(3):
-   r=self.session.get(url,headers={'User-Agent':UA,**(headers or {})},timeout=(10,25),allow_redirects=False,stream=True)
-   if r.status_code in (429,502,503,504) and retry<2:
-    delay=min(30,max(1,int(r.headers.get('Retry-After','1'))) if r.headers.get('Retry-After','1').isdigit() else 3);r.close();time.sleep(delay*(retry+1));self.retry_count+=1;continue
-   if r.status_code==304:r.close();return 304,b'',dict(r.headers)
-   r.raise_for_status()
-   if 300<=r.status_code<400:raise ValueError(f'Redirect requires source review: HTTP {r.status_code}')
-   content=bytearray()
-   for part in r.iter_content(65536):
-    content.extend(part)
-    if len(content)>3_000_000:r.close();raise ValueError('Response exceeds 3MB')
-   r.close();return r.status_code,bytes(content),dict(r.headers)
+   r=None
+   try:
+    r=self.session.get(url,headers={'User-Agent':UA,**(headers or {})},timeout=(10,25),allow_redirects=False,stream=True)
+    if r.status_code in (429,500,502,503,504) and retry<2:
+     delay=r.headers.get('Retry-After','1');delay=min(30,max(1,int(delay))) if delay.isdigit() else 3
+     r.close();time.sleep(delay*(retry+1));self.retry_count+=1;continue
+    if r.status_code==304:return 304,b'',dict(r.headers)
+    r.raise_for_status()
+    if 300<=r.status_code<400:raise ValueError(f'Redirect requires source review: HTTP {r.status_code}')
+    content=bytearray()
+    for part in r.iter_content(65536):
+     content.extend(part)
+     if len(content)>3_000_000:raise ValueError('Response exceeds 3MB')
+    return r.status_code,bytes(content),dict(r.headers)
+   except (requests.Timeout,requests.ConnectionError):
+    if retry==2:raise
+    self.retry_count+=1;time.sleep(retry+1)
+   finally:
+    if r is not None:r.close()
  def get(self,url,headers=None):
   p=urlparse(url);origin=p.scheme+'://'+p.netloc
-  if origin in self.unavailable:raise ValueError('Host unavailable earlier in this run: '+self.unavailable[origin])
   if origin not in self.robots:
    try:_,body,_=self.raw(origin+'/robots.txt')
-   except (requests.Timeout,requests.ConnectionError) as e:
-    self.unavailable[origin]=safe_error(e);raise
    except requests.HTTPError as e:
     if e.response.status_code!=404:raise ValueError('robots.txt cannot be verified') from e
     body=b'User-agent: *\nAllow: /'
@@ -51,10 +56,11 @@ class Fetcher:
   delay=max(1,robot.crawl_delay(UA) or robot.crawl_delay('*') or 1)
   time.sleep(max(0,delay-(time.monotonic()-self.last.get(origin,0))))
   try:return self.raw(url,headers)
-  except (requests.Timeout,requests.ConnectionError) as e:
-   self.unavailable[origin]=safe_error(e);raise
   finally:self.last[origin]=time.monotonic()
 def parse_feed(body,source):
+ if source.get('method'):
+  from .report_sources import parse_report_list
+  body=parse_report_list(body,source)
  parsed=feedparser.parse(body)
  if not parsed.version or not parsed.entries:raise ValueError('No valid RSS/Atom entries')
  entries=[];invalid=0;stamp=now()
@@ -71,11 +77,17 @@ def parse_feed(body,source):
  next_url=next((l.get('href') for l in parsed.feed.get('links',[]) if l.get('rel')=='next'),None)
  return entries,invalid,next_url
 
-def store_entries(db,entries):
+def store_entries(db,entries,metrics=None):
  """One bounded existing-row read, conservative similarity, atomic insert batches."""
  if not entries:return 0,0
  earliest=(datetime.now(timezone.utc)-timedelta(days=60)).isoformat()
  recent=db.all('SELECT id,title,title_key,url,category,published_at FROM items WHERE collected_at>=? ORDER BY collected_at DESC LIMIT 10000',(earliest,))
+ # URL identity is global, even when the original row is older than the fuzzy window.
+ known_ids={row['id'] for row in recent}
+ for offset in range(0,len(entries),100):
+  requested=[row['url'] for row in entries[offset:offset+100]]
+  rows=db.all('SELECT id,title,title_key,url,category,published_at FROM items WHERE url IN ('+','.join('?' for _ in requested)+')',requested)
+  recent.extend(row for row in rows if row['id'] not in known_ids);known_ids.update(row['id'] for row in rows)
  urls={r['url'] for r in recent};keys={r['title_key'] for r in recent};byurl={r['url']:r for r in recent};bykey={r['title_key']:r for r in recent};buckets={};origins=[]
  for r in recent:buckets.setdefault(r['title_key'][:8],[]).append(r)
  new=[];duplicates=0
@@ -92,55 +104,68 @@ def store_entries(db,entries):
    if canonical and item['url']!=canonical['url']:origins.append((item['url'],canonical['url'],item['source_id'],item['title'],item['published_at'],item['collected_at']))
    continue
   new.append(item);urls.add(item['url']);keys.add(item['title_key']);byurl[item['url']]=item;bykey[item['title_key']]=item;buckets.setdefault(item['title_key'][:8],[]).append(item)
+ if metrics is not None:metrics.update(new=len(new),duplicate_candidates=duplicates)
  columns=['id','source_id','title','url','title_key','summary','published_at','collected_at','kind','category','tags','score','score_detail','rule_version','pdf_url','related_key'];inserted=0
  for o in range(0,len(new),40):
   batch=new[o:o+40];sql='INSERT OR IGNORE INTO items('+','.join(columns)+') VALUES '+','.join('('+','.join('?' for _ in columns)+')' for _ in batch)
   inserted+=db.execute(sql,[r[c] for r in batch for c in columns])['changes']
+  if metrics is not None:metrics['inserted']=inserted
  for offset in range(0,len(origins),80):
   batch=origins[offset:offset+80];db.execute('INSERT OR IGNORE INTO duplicate_origins VALUES '+','.join('(?,(SELECT id FROM items WHERE url=?),?,?,?,?)' for _ in batch),[v for row in batch for v in row])
+ # Verify every accepted new URL after writing, including INSERT OR IGNORE conflicts.
+ for offset in range(0,len(new),100):
+  urls=[item['url'] for item in new[offset:offset+100]]
+  found=db.all('SELECT url FROM items WHERE url IN ('+','.join('?' for _ in urls)+')',urls)
+  if {r['url'] for r in found}!=set(urls):raise ValueError('Feed database read-back mismatch')
  db.index_missing();return inserted,duplicates+len(new)-inserted
 
 def collect_source(db,fetcher,source,force=False):
- old=db.one('SELECT * FROM sources WHERE id=?',(source['id'],));start=now()
+ old=db.one('SELECT * FROM sources WHERE id=?',(source['id'],));start=now();run_id=uuid.uuid4().hex
  if not old['enabled']:return {'source':source['id'],'status':'disabled'}
  if not force and old['last_attempt'] and (datetime.now(timezone.utc)-datetime.fromisoformat(old['last_attempt'])).total_seconds()<old['interval_minutes']*60:return {'source':source['id'],'status':'not_due'}
- fetched=inserted=duplicates=invalid=0;error=None;status='success'
+ fetched=inserted=duplicates=invalid=0;error=None;status='success';stage='fetch';metrics={};latest_published=None
  try:
   headers={}
-  if old['etag']:headers['If-None-Match']=old['etag']
-  if old['last_modified']:headers['If-Modified-Since']=old['last_modified']
+  if not force and old['etag']:headers['If-None-Match']=old['etag']
+  if not force and old['last_modified']:headers['If-Modified-Since']=old['last_modified']
   code,body,h=fetcher.get(source['url'],headers)
   if code==304:status='not_modified'
   else:
-   page=source['url'];all_entries=[]
+   stage='parse';page=source['url'];all_entries=[]
    for n in range(3):
     entries,bad,next_url=parse_feed(body,source);all_entries.extend(entries);invalid+=bad
     if not next_url:break
     next_url=urljoin(page,next_url)
     if urlparse(next_url).hostname!=urlparse(source['url']).hostname:raise ValueError('Cross-host pagination denied')
     if n<2:_,body,_=fetcher.get(next_url);page=next_url
-   fetched=len(all_entries);inserted,duplicates=store_entries(db,all_entries)
+   fetched=len(all_entries);latest_published=max((e['published_at'] for e in all_entries if e['published_at']),default=None)
+   stage='store_verify';inserted,duplicates=store_entries(db,all_entries,metrics)
    db.execute('UPDATE sources SET etag=?,last_modified=? WHERE id=?',(h.get('ETag'),h.get('Last-Modified'),source['id']))
- except Exception as e:error=safe_error(e);status='failed'
- end=now();db.execute('INSERT INTO runs(id,source_id,started_at,finished_at,status,fetched,inserted,duplicates,invalid,error) VALUES(?,?,?,?,?,?,?,?,?,?)',(uuid.uuid4().hex,source['id'],start,end,status,fetched,inserted,duplicates,invalid,error))
+ except Exception as e:
+  error=safe_error(e);status='failed';inserted=metrics.get('inserted',inserted);duplicates=metrics.get('duplicate_candidates',duplicates)
+ error_stage=stage if error else None
+ end=now();db.execute('INSERT INTO runs(id,source_id,started_at,finished_at,status,fetched,inserted,duplicates,invalid,error) VALUES(?,?,?,?,?,?,?,?,?,?)',(run_id,source['id'],start,end,status,fetched,inserted,duplicates,invalid,error))
  db.execute('UPDATE sources SET status=?,last_attempt=?,last_success=CASE WHEN ? IS NULL THEN ? ELSE last_success END,first_success=CASE WHEN ? IS NULL THEN coalesce(first_success,?) ELSE first_success END,error=?,count=(SELECT count(*) FROM items WHERE source_id=?) WHERE id=?',(status,end,error,end,error,end,error,source['id'],source['id']))
- return {'source':source['id'],'status':status,'fetched':fetched,'inserted':inserted,'duplicates':duplicates,'invalid':invalid,'error':error}
+ stored=db.one('SELECT max(published_at) AS published,max(collected_at) AS collected FROM items WHERE source_id=?',(source['id'],))
+ detail={'source':source['id'],'status':status,'fetched':fetched,'new':metrics.get('new',0),'inserted':inserted,'duplicates':duplicates,'invalid':invalid,'latest_published':latest_published,'latest_stored':stored['published'],'latest_collected':stored['collected'],'error_stage':error_stage,'error':error}
+ db.execute('INSERT INTO collection_diagnostics(run_id,source_id,checked_at,payload) VALUES(?,?,?,?)',(run_id,source['id'],end,json.dumps(detail,ensure_ascii=False)))
+ return detail
 
 def collect_series(db,fetcher,entry,force=False):
- sid,name,unit,freq,provider=entry;old=db.one('SELECT updated_at FROM series WHERE id=?',(sid,));start=now();count=0;error=None
+ sid,name,unit,freq,provider=entry;old=db.one('SELECT updated_at FROM series WHERE id=?',(sid,));start=now();count=0;error=None;stage='configuration';latest=None
  if not force and old['updated_at'] and (datetime.now(timezone.utc)-datetime.fromisoformat(old['updated_at'])).total_seconds()<12*3600:return {'series':sid,'status':'not_due'}
  try:
   startdate=(datetime.now(timezone.utc)-timedelta(days=760)).date().isoformat();key=os.getenv('FRED_API_KEY','')
   if key:
    if not re.fullmatch(r'[a-z0-9]{32}',key):raise ValueError('FRED_API_KEY must be a registered 32-character lower-case key')
    url='https://api.stlouisfed.org/fred/series/observations?'+urlencode({'series_id':sid,'api_key':key,'file_type':'json','observation_start':startdate,'sort_order':'asc','limit':10000})
-   _,body,_=fetcher.get(url);data=json.loads(body)
+   stage='fetch';_,body,_=fetcher.get(url);stage='parse';data=json.loads(body)
    if 'observations' not in data:raise ValueError('Official FRED API returned no observations')
    if data.get('count',0)>10000:raise ValueError('FRED response requires pagination; refusing truncation')
    reader=({'observation_date':r['date'],sid:r['value']} for r in data['observations'])
   else:
    url=f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd={startdate}'
-   _,body,_=fetcher.get(url);reader=csv.DictReader(io.StringIO(body.decode('utf-8-sig')))
+   stage='fetch';_,body,_=fetcher.get(url);stage='parse';reader=csv.DictReader(io.StringIO(body.decode('utf-8-sig')))
    if reader.fieldnames not in (['observation_date',sid],['DATE',sid]):raise ValueError('Unexpected CSV header')
   points=[];received_at=datetime.now(timezone.utc).isoformat()
   for row in reader:
@@ -151,19 +176,19 @@ def collect_series(db,fetcher,entry,force=False):
    if day>datetime.now(timezone.utc).date().isoformat():continue
    points.append((sid,day,v,received_at))
   if not points:raise ValueError('No valid observations')
-  db.execute("INSERT OR IGNORE INTO observation_vintages SELECT series_id,date,collected_at,value,'collector_first_seen_not_official_release' FROM observations WHERE series_id=?",(sid,))
+  stage='store';db.execute("INSERT OR IGNORE INTO observation_vintages SELECT series_id,date,collected_at,value,'collector_first_seen_not_official_release' FROM observations WHERE series_id=?",(sid,))
   for o in range(0,len(points),100):
    batch=points[o:o+100];db.execute('INSERT INTO observations(series_id,date,value,collected_at) VALUES '+','.join('(?,?,?,?)' for _ in batch)+' ON CONFLICT(series_id,date) DO UPDATE SET value=excluded.value,collected_at=CASE WHEN observations.value!=excluded.value THEN excluded.collected_at ELSE observations.collected_at END',[v for p in batch for v in p])
   db.execute("INSERT OR IGNORE INTO observation_vintages SELECT series_id,date,collected_at,value,'collector_first_seen_not_official_release' FROM observations WHERE series_id=?",(sid,))
-  stored={r['date']:r['value'] for r in db.all('SELECT date,value FROM observations WHERE series_id=? AND date>=? AND date<=?',(sid,points[0][1],points[-1][1]))}
+  stage='store_verify';stored={r['date']:r['value'] for r in db.all('SELECT date,value FROM observations WHERE series_id=? AND date>=? AND date<=?',(sid,points[0][1],points[-1][1]))}
   if any(stored.get(day)!=value for _,day,value,_ in points):raise ValueError('Database read-back does not match downloaded observations')
-  count=len(points);db.execute("UPDATE series SET status='success',updated_at=?,error=NULL WHERE id=?",(received_at,sid))
+  count=len(points);latest=max(points,key=lambda p:p[1]);db.execute("UPDATE series SET status='success',updated_at=?,error=NULL WHERE id=?",(received_at,sid))
  except Exception as e:error=safe_error(e)+(' · 공개 CSV 경로 실패. GitHub Secrets의 FRED_API_KEY로 공식 API 경로를 사용할 수 있습니다.' if not os.getenv('FRED_API_KEY') else '');db.execute("UPDATE series SET status='failed',error=? WHERE id=?",(error,sid))
  db.execute('INSERT INTO indicator_runs VALUES(?,?,?,?,?,?)',(uuid.uuid4().hex,sid,start,'failed' if error else 'success',count,error))
- return {'series':sid,'status':'failed' if error else 'success','count':count,'error':error}
+ return {'series':sid,'status':'failed' if error else 'success','count':count,'latest_stored':latest[1] if latest else None,'latest_value':latest[2] if latest else None,'unit':unit,'error_stage':stage if error else None,'error':error}
 
 def run(db,mode='all',force=False,source_ids=None):
- db.migrate();initialize(db);owner=uuid.uuid4().hex;stamp=now();expires=(datetime.now(timezone.utc)+timedelta(minutes=25)).isoformat(timespec='seconds')
+ db.migrate();initialize(db);owner=uuid.uuid4().hex;stamp=now();expires=(datetime.now(timezone.utc)+timedelta(minutes=45)).isoformat(timespec='seconds')
  lock=db.all("INSERT INTO collection_lock(id,owner,expires_at) VALUES('collector',?,?) ON CONFLICT(id) DO UPDATE SET owner=excluded.owner,expires_at=excluded.expires_at WHERE collection_lock.expires_at<? RETURNING owner",(owner,expires,stamp))
  if not lock:return [{'status':'busy'}]
  results=[];fetcher=Fetcher()
@@ -184,7 +209,9 @@ if __name__=='__main__':
  failures=sum(r.get('status')=='failed' for r in results);executed=sum(r.get('status') in ('failed','success','not_modified') for r in results)
  if os.getenv('GITHUB_STEP_SUMMARY'):
   with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary:
-   summary.write('## Collection results\n\n| Source / series | Status | Error |\n|---|---|---|\n')
-   for r in results:summary.write('| '+str(r.get('source',r.get('series','collector')))+' | '+r.get('status','unknown')+' | '+str(r.get('error') or '').replace('|','/')+' |\n')
+   summary.write('## Collection results\n\n| Source / series | Status | Fetched | New | Duplicate | Inserted / points | Latest Published | Latest Stored | Failure stage | Error |\n|---|---|---|---|---|---|---|---|---|---|\n')
+   for r in results:
+    values=[r.get('source',r.get('series','collector')),r.get('status'),r.get('fetched'),r.get('new'),r.get('duplicates'),r.get('inserted',r.get('count')),r.get('latest_published'),r.get('latest_stored'),r.get('error_stage'),r.get('error')]
+    summary.write('| '+' | '.join(str(v if v is not None else '').replace('|','/').replace('\n',' ') for v in values)+' |\n')
  if failures:print(f'::warning::{failures} collection tasks failed. Review source/indicator logs; partial success is not full coverage.')
  if failures:raise SystemExit(1)
